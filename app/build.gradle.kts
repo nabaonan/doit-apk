@@ -17,10 +17,33 @@ val releaseStorePath: String? = System.getenv("QUANDIAN_KEYSTORE")
     ?: keystoreProps.getProperty("storeFile")?.let { rootProject.file(it).absolutePath }
     ?: rootProject.file("keystore/quandian-release.jks").takeIf { it.exists() }?.absolutePath
 
-// 版本号与产物名前缀：APK 统一叫 doit-<版本>-<构建类型>.apk
-val appVersionCode = 8
-val appVersionName = "1.7.0"
+// ---- 版本号：完全由 git tag 推导，不再手改 ----
+// 打 v1.2.3 这个 tag，出来的就是 versionName=1.2.3、versionCode=10203；
+// 没 tag（本地随便构建 / workflow_dispatch）时退回 1.0.0，保证一定能出包。
+fun gitOutput(vararg args: String): String? = runCatching {
+    val proc = ProcessBuilder(listOf("git") + args)
+        .directory(rootProject.projectDir)
+        .redirectErrorStream(true)
+        .start()
+    val text = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+    if (proc.waitFor() == 0 && text.isNotEmpty()) text else null
+}.getOrNull()
+
+val semverTag = Regex("""v(\d+)\.(\d+)\.(\d+)$""")
+
+// CI 上 GitHub 会把被推送的 tag 放进 GITHUB_REF_NAME；本地则取最近的一个 tag
+val rawTag: String? = System.getenv("GITHUB_REF_NAME")?.takeIf { semverTag.matches(it) }
+    ?: gitOutput("describe", "--tags", "--abbrev=0")?.takeIf { semverTag.matches(it) }
+
+val tagNumbers = rawTag?.let { semverTag.find(it) }?.groupValues?.drop(1)?.map { it.toInt() }
+
+val appVersionName = tagNumbers?.joinToString(".") ?: "1.0.0"
+// versionCode 由 semver 推导：1.2.3 → 1*10000 + 2*100 + 3 = 10203，
+// 随 tag 单调递增，既不用手工维护也不会和旧版本撞号。
+val appVersionCode = tagNumbers?.let { (major, minor, patch) -> major * 10000 + minor * 100 + patch } ?: 10000
 val apkBaseName = "doit"
+
+logger.lifecycle("doit 版本：$appVersionName ($appVersionCode)${rawTag?.let { " 来自 tag $it" } ?: "（无 tag，使用默认值）"}")
 
 android {
     namespace = "com.quandian.app"

@@ -186,7 +186,7 @@
 | 2 | 去掉子任务前面的竖线 | `SubtaskGroup` 删掉那层 `Canvas` 引导线，层级只靠缩进：一级 20dp、二级再缩 14dp。子任务卡本身尺寸、内边距、圆圈都与父卡一致，所以缩进一眼就能看出从属关系 |
 | 3 | 父任务的子任务数量显示到右下角，展开按钮挪到最右，和优先级对调位置 | 数量从标题行里搬出来，放进「分类 · 时间」那一行（`Row { MetaRow; weight(1f); ChildCount }`），既贴右下角又不占标题宽度；`CardTrailing` 顺序改成「优先级标签 → 展开箭头」，箭头成为卡片最右缘的元素。优先级标签同时改用 `compact` 版式（内边距 6/2dp、9sp），配合更省横向空间；标题列仍是 `weight(1f)`，长标题最多两行后省略 |
 
-## 第十四轮：去掉默认分类 + 优先级换色 + 数量归位 + 动作按钮等距（v1.7.0，4 项）
+## 第十四轮：去掉默认分类 + 优先级换色 + 数量归位 + 动作按钮等距（4 项）
 
 | # | 需求 | 实现 |
 | --- | --- | --- |
@@ -235,10 +235,15 @@ Quandian/
 ./gradlew lintDebug              # Lint 静态检查
 ```
 
+**版本号不用手改**：`app/build.gradle.kts` 从 git tag 推导——打 `v1.2.3` 就是
+`versionName=1.2.3`、`versionCode=10203`（`major*10000 + minor*100 + patch`，随版本单调递增）；
+当前工作区没有 tag 时回退到 `1.0.0 / 10000`，保证任何情况都能出包。
+发版只要 `git tag v1.2.3 && git push origin v1.2.3`。
+
 安装到手机：
 
 ```bash
-adb install -r app/build/outputs/apk/debug/doit-1.7.0-debug.apk
+adb install -r app/build/outputs/apk/debug/doit-1.0.0-debug.apk
 ```
 
 - 调试包包名 `com.quandian.app.debug`，可与正式包共存，桌面显示「doit · 调试」
@@ -248,8 +253,8 @@ adb install -r app/build/outputs/apk/debug/doit-1.7.0-debug.apk
 
 ```
 dist/
-├── doit-1.7.0-debug.apk     # 调试包，包名 com.quandian.app.debug，桌面显示「doit · 调试」，可与正式包共存（含示例分类/待办 + 一年演示记录）
-├── doit-1.7.0-release.apk   # 正式包，包名 com.quandian.app（keystore/quandian-release.jks 签名），零内置数据
+├── doit-1.0.0-debug.apk     # 调试包，包名 com.quandian.app.debug，桌面显示「doit · 调试」，可与正式包共存（含示例分类/待办 + 一年演示记录）
+├── doit-1.0.0-release.apk   # 正式包，包名 com.quandian.app（keystore/quandian-release.jks 签名），零内置数据
 └── SHA256SUMS.txt               # 校验和
 
 screenshots/                     # 验收截图：01–15 模拟器（1080×2400 / Android 15），real_* 真机
@@ -289,9 +294,10 @@ CI 打正式包时通过仓库 Secrets 提供：`KEYSTORE_BASE64` / `KEYSTORE_PA
 
 `.github/workflows/android.yml`
 
-- `push` / `pull_request` 到 `main`：单测 → Lint → `assembleDebug` → 上传 APK 产物（artifact 名 `doit-debug-apk`）
-- 打 `v*` tag：额外构建签名过的正式包，artifact 名 `doit-release-apk`，并以 `doit-<tag>-release.apk` 挂到 GitHub Releases
-- 也可以用 `workflow_dispatch` 手动触发
+- **只在打 `v*` tag 时触发**：普通 `push main` / PR 不会跑，省 Actions 额度
+- tag 构建：单测 → Lint → `assembleDebug`（artifact `doit-debug-apk`）→ 正式包（artifact `doit-release-apk`，
+  并以 `doit-<tag>-release.apk` 挂到 GitHub Releases）
+- 需要手动验证时用 `workflow_dispatch`，那种情况没有 tag，版本号回退 `1.0.0`
 
 CI 不经过 wrapper：`gradle/actions/setup-gradle` 直接装官方 Gradle 8.11.1 并调用 `gradle`，
 因为 `gradle-wrapper.properties` 的 `distributionUrl` 指向腾讯镜像，境外 runner 拉 130MB 常常慢到超时。
