@@ -30,25 +30,49 @@ object WebDavClient {
     suspend fun test(url: String, user: String, pass: String): Result<String> = withContext(Dispatchers.IO) {
         if (url.isBlank()) return@withContext Result.failure(IOException("先填一下服务器地址"))
         runCatching {
-            val normalized = normalize(url)
-            val code = try {
-                val conn = open(normalized, "PROPFIND", user, pass)
-                conn.setRequestProperty("Depth", "0")
-                val c = conn.responseCode
-                if (c == 401 || c == 403) throw IOException("账号或密码不对（$c）")
-                conn.disconnect()
-                c
-            } catch (e: java.net.ProtocolException) {
-                // 少数实现不允许自定义方法，退化成 HEAD 探活
-                val conn = open(normalized, "HEAD", user, pass)
-                val c = conn.responseCode
-                if (c == 401 || c == 403) throw IOException("账号或密码不对（$c）")
-                conn.disconnect()
-                c
+            val base = normalize(url)
+            val host = URL(base).host
+            // 依次尝试：原样 → 末尾补一个 /。
+            // 飞牛 fnOS 等实现里，对集合根路径缺斜杠会直接回 405，
+            // 补上 / 之后再 PROPFIND 通常就能通过。
+            val attempts = listOf(base, base.trimEnd('/') + "/").distinct()
+            var authFailed = false
+            var lastCode = 0
+            for (candidate in attempts) {
+                val code = probe(candidate, user, pass)
+                if (code == 401 || code == 403) { authFailed = true; continue }
+                if (code in 200..399) {
+                    val autoSlash = candidate.endsWith("/") && !base.endsWith("/")
+                    return@withContext Result.success(
+                        if (autoSlash) "连接成功 · $host（已自动补末尾 /）" else "连接成功 · $host",
+                    )
+                }
+                lastCode = code
             }
-            if (code in 200..399) "连接成功 · ${URL(normalized).host}"
-            else throw IOException("服务器返回 $code")
+            if (authFailed) throw IOException("账号或密码不对（401/403）")
+            if (lastCode == 405) {
+                throw IOException(
+                    "服务器拒绝了 WebDAV 探测（405）。" +
+                        "建议：① 地址结尾补一个 /；② 先在 NAS 文件管理里建好同步文件夹，" +
+                        "再填成 https://…/webdav/doit 这类子路径；③ 确认账号用的是 WebDAV 专用账号。",
+                )
+            }
+            throw IOException("服务器返回 $lastCode")
         }
+    }
+
+    /** 发一次 PROPFIND（Depth:0）探测目录；个别实现不允许自定义方法时退化成 HEAD */
+    private fun probe(url: String, user: String, pass: String): Int = try {
+        val conn = open(url, "PROPFIND", user, pass)
+        conn.setRequestProperty("Depth", "0")
+        val c = conn.responseCode
+        conn.disconnect()
+        c
+    } catch (e: java.net.ProtocolException) {
+        val conn = open(url, "HEAD", user, pass)
+        val c = conn.responseCode
+        conn.disconnect()
+        c
     }
 
     suspend fun upload(

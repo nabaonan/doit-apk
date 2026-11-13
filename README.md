@@ -195,6 +195,13 @@
 | 3 | 子任务数量显示到展开按钮的下方 | `ChildCount` 并进 `CardTrailing`：右端变成一个竖向小组件 `Column { ExpandChevron; 2dp; "2/3" }`，数字在箭头正下方居中，与箭头一起垂直居中于卡片；标题行右下角不再放数字，长标题因此多出约 24dp 的可用宽度 |
 | 4 | 管理分类左滑的两个按钮太挤，且父任务/子任务右滑露出按钮的间距不一致 | 新增 `ActionMetrics`（`Slot 38dp` / `Gap 5dp` / `Edge 6dp` / 图标圆 26dp、图标 13dp）作为唯一尺寸表：`RowScopeAction` 不再各自传宽度，父卡四动作、子卡三动作、分类管理卡两动作都用同一套槽宽，行内用 `Arrangement.spacedBy(Gap, End)` 拉出等距，卡片让位距离改由 `ActionMetrics.widthOf(count)` 算出——滑开时按钮刚好露完、不多不少。分类卡原来两个 28dp 圆紧贴在一起（间距 0），现在和待办卡一样是 5dp 槽间隙 + 12dp 圆内留白 |
 
+## 发版与同步排障（第十八轮）
+
+- **一键发版 `./release.sh`**：读取最近一个 tag 自动 +0.0.1 打新 tag 并推送，触发 CI 构建发布。
+  - `./release.sh` / `patch`：`v1.0.0 → v1.0.1`；`minor`：`v1.0.1 → v1.1.0`；`major`：`v1.1.0 → v2.0.0`；也可 `./release.sh 1.2.3` 直接指定。
+  - `--dry-run` 只预览不操作；工作区有未提交改动会中止（`--force` 可跳过）；会校验本地/远端是否已存在同名 tag。
+- **WebDAV 测试连接 405**：飞牛 fnOS 这类服务器，对集合根路径少末尾斜杠、或其自动建目录受限时，会对 `PROPFIND` 返回 405。`WebDavClient.test()` 现在先按原地址探测，遇 405 自动补 `/` 重试（成功提示「已自动补末尾 /」），仍失败时给出针对 405 的具体建议（补 `/`、先在 NAS 文件管理建好同步文件夹再填子路径、用 WebDAV 专用账号）。
+
 ## 技术栈
 
 - Kotlin 2.0.21 · Jetpack Compose（BOM 2024.12.01）· Material 3
@@ -297,6 +304,7 @@ CI 打正式包时通过仓库 Secrets 提供：`KEYSTORE_BASE64` / `KEYSTORE_PA
 - **只在打 `v*` tag 时触发**：普通 `push main` / PR 不会跑，省 Actions 额度
 - tag 构建：单测 → Lint → `assembleDebug`（artifact `doit-debug-apk`）→ 正式包（artifact `doit-release-apk`，
   并以 `doit-<tag>-release.apk` 挂到 GitHub Releases）
+- **日常发版用仓库根目录的 `./release.sh`**：自动自增版本 → 打 tag → 推送，其余不需要手动 `git tag`。
 - 需要手动验证时用 `workflow_dispatch`，那种情况没有 tag，版本号回退 `1.0.0`
 
 CI 不经过 wrapper：`gradle/actions/setup-gradle` 直接装官方 Gradle 8.11.1 并调用 `gradle`，
