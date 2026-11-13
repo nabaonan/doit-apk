@@ -48,6 +48,12 @@ object SeedData {
     )
 }
 
+/**
+ * 同步落地用的一条任务：Room 只认 [TaskEntity.id] 做父子关系，
+ * 而快照里父子关系用稳定 uid 表示，所以额外带一个 [parentUid] 供落地时二次映射。
+ */
+data class TaskSyncRow(val entity: TaskEntity, val parentUid: String?)
+
 class TaskRepository(private val db: QuandianDatabase) {
 
     private val taskDao = db.taskDao()
@@ -69,17 +75,33 @@ class TaskRepository(private val db: QuandianDatabase) {
     suspend fun ensureSeeded() {
         if (taskDao.count() > 0) return
         db.withTransaction {
-            if (categoryDao.count() == 0) categoryDao.upsertAll(SeedData.categories)
-            val now = System.currentTimeMillis()
+            if (categoryDao.count() == 0) {
+                categoryDao.upsertAll(SeedData.categories.map { it.copy(updatedAt = nowMs()) })
+            }
+            val now = nowMs()
             SeedData.tasks.forEachIndexed { index, item ->
                 insertSeed(item, parentId = null, sortOrder = index.toLong(), doneAt = now)
             }
         }
     }
 
+    /** 老数据 / 意外漏写元信息的行补齐，幂等，启动时跑一次即可 */
+    suspend fun ensureSyncMeta() {
+        val missing = taskDao.allIncludingDeleted().filter { it.uid.isBlank() || it.updatedAt == 0L }
+        missing.forEach { t ->
+            taskDao.update(
+                t.copy(
+                    uid = if (t.uid.isBlank()) newUid() else t.uid,
+                    updatedAt = if (t.updatedAt == 0L) t.createdAt else t.updatedAt,
+                ),
+            )
+        }
+    }
+
     private suspend fun insertSeed(seed: SeedData.Seed, parentId: Long?, sortOrder: Long, doneAt: Long): Long {
         val id = taskDao.insert(
             TaskEntity(
+                uid = newUid(),
                 parentId = parentId,
                 title = seed.title,
                 category = seed.category,
@@ -87,6 +109,8 @@ class TaskRepository(private val db: QuandianDatabase) {
                 timeLabel = seed.time,
                 done = seed.done,
                 completedAt = if (seed.done) doneAt else null,
+                createdAt = doneAt,
+                updatedAt = doneAt,
                 sortOrder = sortOrder,
             ),
         )
@@ -108,7 +132,7 @@ class TaskRepository(private val db: QuandianDatabase) {
         if (logDao.since(0L).any { it.taskId >= DEMO_TASK_ID_BASE }) return
         val random = java.util.Random(20261111L)
         val cats = listOf("工作", "阅读", "采购", "运动")
-        val now = System.currentTimeMillis()
+        val now = nowMs()
         val day = 24L * 60 * 60 * 1000
         val logs = mutableListOf<CompletionLogEntity>()
         for (offset in 364 downTo 0) {
@@ -152,8 +176,14 @@ class TaskRepository(private val db: QuandianDatabase) {
     }
 
     private suspend fun applyDone(task: TaskEntity, done: Boolean) {
-        val now = System.currentTimeMillis()
-        taskDao.update(task.copy(done = done, completedAt = if (done) now else null))
+        val now = nowMs()
+        taskDao.update(
+            task.copy(
+                done = done,
+                completedAt = if (done) now else null,
+                updatedAt = now,
+            ),
+        )
         if (done) {
             logDao.insert(
                 CompletionLogEntity(taskId = task.id, category = task.category, completedAt = now),
@@ -191,12 +221,16 @@ class TaskRepository(private val db: QuandianDatabase) {
     suspend fun addTask(title: String, category: String, priority: Int = 0) {
         db.withTransaction {
             val min = taskDao.minSortOf(null) ?: 0L
+            val now = nowMs()
             taskDao.insert(
                 TaskEntity(
+                    uid = newUid(),
                     title = title.trim(),
                     category = category,
                     priority = priority,
                     timeLabel = "刚刚",
+                    createdAt = now,
+                    updatedAt = now,
                     sortOrder = min - 1,
                 ),
             )
@@ -207,13 +241,17 @@ class TaskRepository(private val db: QuandianDatabase) {
         db.withTransaction {
             val parent = taskDao.byId(parentId) ?: return@withTransaction
             val siblings = taskDao.childrenOf(parentId)
+            val now = nowMs()
             val id = taskDao.insert(
                 TaskEntity(
+                    uid = newUid(),
                     parentId = parentId,
                     title = title.trim(),
                     category = parent.category,
                     priority = priority,
                     timeLabel = "刚刚",
+                    createdAt = now,
+                    updatedAt = now,
                     sortOrder = (siblings.maxOfOrNull { it.sortOrder } ?: -1L) + 1,
                     depth = parent.depth + 1,
                 ),
@@ -224,25 +262,30 @@ class TaskRepository(private val db: QuandianDatabase) {
 
     suspend fun setPriority(id: Long, level: Int) {
         val task = taskDao.byId(id) ?: return
-        taskDao.update(task.copy(priority = level))
+        taskDao.update(task.copy(priority = level, updatedAt = nowMs()))
     }
 
     suspend fun moveToCategory(id: Long, category: String) {
         db.withTransaction {
             val ids = descendantIds(id)
-            taskDao.setCategory(ids, category)
+            taskDao.setCategory(ids, category, nowMs())
         }
     }
 
+    /** 软删除：留下墓碑，删除动作才能同步到另一台设备，而不是被当成「本地没有这条」 */
     suspend fun delete(id: Long) {
         db.withTransaction {
             val ids = descendantIds(id)
+            val now = nowMs()
+            ids.forEach { tid ->
+                val t = taskDao.byId(tid) ?: return@forEach
+                taskDao.update(t.copy(deletedAt = now, updatedAt = now))
+            }
             logDao.deleteForTasks(ids)
-            taskDao.deleteByIds(ids)
         }
     }
 
-    /** 自己 + 全部下级 */
+    /** 自己 + 全部下级（只算没删的） */
     private suspend fun descendantIds(id: Long): List<Long> {
         val result = mutableListOf<Long>()
         suspend fun walk(current: Long) {
@@ -256,15 +299,24 @@ class TaskRepository(private val db: QuandianDatabase) {
     suspend fun addCategory(name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        val existing = categoryDao.all()
-        if (existing.any { it.name == trimmed }) return
-        val color = com.quandian.app.ui.theme.PaletteColors[existing.size % com.quandian.app.ui.theme.PaletteColors.size]
-        categoryDao.upsert(CategoryEntity(trimmed, color.removePrefix("#"), existing.size))
+        val existing = categoryDao.allIncludingDeleted().firstOrNull { it.name == trimmed }
+        if (existing != null) {
+            // 之前删过的同名分类重新启用：把墓碑清掉，算一次新编辑
+            if (existing.deletedAt != null) {
+                categoryDao.upsert(existing.copy(deletedAt = null, updatedAt = nowMs()))
+            }
+            return
+        }
+        val alive = categoryDao.all()
+        val color = com.quandian.app.ui.theme.PaletteColors[alive.size % com.quandian.app.ui.theme.PaletteColors.size]
+        categoryDao.upsert(
+            CategoryEntity(trimmed, color.removePrefix("#"), alive.size, updatedAt = nowMs()),
+        )
     }
 
     suspend fun setCategoryColor(name: String, hex: String) {
         val target = categoryDao.all().firstOrNull { it.name == name } ?: return
-        categoryDao.upsert(target.copy(colorHex = hex.removePrefix("#")))
+        categoryDao.upsert(target.copy(colorHex = hex.removePrefix("#"), updatedAt = nowMs()))
     }
 
     /**
@@ -273,42 +325,55 @@ class TaskRepository(private val db: QuandianDatabase) {
      */
     suspend fun deleteCategory(name: String) {
         db.withTransaction {
+            val now = nowMs()
+            val cat = categoryDao.allIncludingDeleted().firstOrNull { it.name == name && it.deletedAt == null }
+                ?: return@withTransaction
+            categoryDao.upsert(cat.copy(deletedAt = now, updatedAt = now))
             val all = taskDao.all().filter { it.category == name }
-            if (all.isNotEmpty()) taskDao.setCategory(all.map { it.id }, NO_CATEGORY)
-            categoryDao.delete(name)
+            if (all.isNotEmpty()) taskDao.setCategory(all.map { it.id }, NO_CATEGORY, now)
         }
     }
 
     suspend fun categoryCounts(): Map<String, Int> = taskDao.all().filter { it.parentId == null }.groupingBy { it.category }.eachCount()
 
-    suspend fun exportSnapshot(): String {
-        val tasks = taskDao.all()
-        val cats = categoryDao.all()
-        val sb = StringBuilder()
-        sb.append("{\"version\":1,\"exportedAt\":").append(System.currentTimeMillis()).append(",\"categories\":[")
-        cats.forEachIndexed { i, c ->
-            if (i > 0) sb.append(',')
-            sb.append("{\"name\":\"").append(c.name.esc()).append("\",\"color\":\"").append(c.colorHex).append("\"}")
-        }
-        sb.append("],\"tasks\":[")
-        tasks.forEachIndexed { i, t ->
-            if (i > 0) sb.append(',')
-            sb.append('{')
-            sb.append("\"id\":").append(t.id).append(',')
-            sb.append("\"parentId\":").append(t.parentId ?: 0).append(',')
-            sb.append("\"title\":\"").append(t.title.esc()).append("\",")
-            sb.append("\"category\":\"").append(t.category.esc()).append("\",")
-            sb.append("\"priority\":").append(t.priority).append(',')
-            sb.append("\"done\":").append(t.done).append(',')
-            sb.append("\"time\":\"").append(t.timeLabel.esc()).append("\",")
-            sb.append("\"sortOrder\":").append(t.sortOrder)
-            sb.append('}')
-        }
-        sb.append("]}")
-        return sb.toString()
-    }
+    /** 供同步读取：含墓碑的完整本地状态 */
+    suspend fun snapshotEntities(): Pair<List<TaskEntity>, List<CategoryEntity>> =
+        taskDao.allIncludingDeleted() to categoryDao.allIncludingDeleted()
 
-    private fun String.esc() = replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+    /**
+     * 把合并结果落回本地。按 uid 复用已有的 Room 行号，保证完成日志等按 id 关联的数据不丢；
+     * 新记录先插入再统一回填 parentId（快照里的父子关系用 uid 表示）。
+     */
+    suspend fun applyMerged(rows: List<TaskSyncRow>, categoryRows: List<CategoryEntity>) {
+        db.withTransaction {
+            val idByUid = taskDao.allIncludingDeleted().associate { it.uid to it.id }.toMutableMap()
+            val insertRows = mutableListOf<TaskEntity>()
+            val updateRows = mutableListOf<TaskEntity>()
+            for (row in rows) {
+                val e = row.entity.copy(parentId = null)
+                val existing = idByUid[e.uid]
+                if (existing == null) insertRows += e.copy(id = 0)
+                else updateRows += e.copy(id = existing)
+            }
+            taskDao.insertAll(insertRows)
+            taskDao.updateAll(updateRows)
+
+            // 重新取一次，把新插入的行号也纳进映射
+            val finalIds = taskDao.allIncludingDeleted().associate { it.uid to it.id }
+            val aliveIds = finalIds.values.toHashSet()
+            for (row in rows) {
+                val id = finalIds[row.entity.uid] ?: continue
+                // 父记录被清理掉时把这条提成顶层，避免整条记录从界面上消失
+                val parentId = row.parentUid?.let { finalIds[it] }?.takeIf { aliveIds.contains(it) }
+                taskDao.setParentId(id, parentId)
+            }
+
+            categoryDao.upsertAll(categoryRows)
+            // 墓碑行对应的完成日志不再出现在统计里
+            val deletedIds = taskDao.allIncludingDeleted().filter { it.deletedAt != null }.map { it.id }
+            if (deletedIds.isNotEmpty()) logDao.deleteForTasks(deletedIds)
+        }
+    }
 
     companion object {
         /** 示例完成记录用的虚拟任务 id 起点，仅调试包写入 */
@@ -323,7 +388,7 @@ class TaskRepository(private val db: QuandianDatabase) {
                     context.applicationContext,
                     QuandianDatabase::class.java,
                     QuandianDatabase.NAME,
-                ).build(),
+                ).addMigrations(QuandianDatabase.MIGRATION_1_2).build(),
             ).also { instance = it }
         }
     }

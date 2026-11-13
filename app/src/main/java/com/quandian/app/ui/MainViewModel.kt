@@ -12,6 +12,7 @@ import com.quandian.app.data.TaskNode
 import com.quandian.app.data.TaskRepository
 import com.quandian.app.data.buildTree
 import com.quandian.app.sync.DavUrl
+import com.quandian.app.sync.SyncEngine
 import com.quandian.app.sync.WebDavClient
 import com.quandian.app.ui.theme.FlowSkin
 import com.quandian.app.ui.theme.parseHex
@@ -58,6 +59,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = TaskRepository.get(app)
     private val settingsRepo = SettingsRepository(app)
+    private val syncEngine = SyncEngine(repo, settingsRepo)
 
     /** 子任务组的展开 / 收起状态放在 ViewModel 里，滚动出屏幕或转屏都不会被重置 */
     val expand = com.quandian.app.ui.components.ExpandState()
@@ -112,6 +114,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
+            // 老库升级后补齐同步元信息（幂等），再谈别的
+            repo.ensureSyncMeta()
             // 正式包什么都不预置：首页只有「全部」，分类和待办都由用户自己建
             if (BuildConfig.DEBUG) {
                 // 调试包：分类 + 示例待办 + 一年演示完成记录，打开就有内容可看
@@ -282,13 +286,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settingsRepo.setDavConfig(url, user, pass)
             say("正在同步…")
-            val snapshot = repo.exportSnapshot()
-            WebDavClient.upload(url, user, pass, "quandian-backup.json", snapshot).fold(
-                onSuccess = { r ->
-                    r.workingUrl?.let { settingsRepo.setDavConfig(it, user, pass) }
-                    settingsRepo.setLastSync("上次同步 · 刚刚 · ${snapshot.length} 字节 · ${r.message}")
-                    say(if (r.workingUrl != null) "同步完成，地址已自动修正" else "配置已保存，同步完成")
-                },
+            syncEngine.synchronize(url, user, pass).fold(
+                onSuccess = { report -> say("配置已保存 · ${report.detail}") },
                 onFailure = { say(it.message ?: "同步失败") },
             )
         }

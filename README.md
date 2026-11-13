@@ -217,6 +217,50 @@
 
 **验证**：本机起了一个模拟飞牛行为的 WebDAV 服务（`/webdav/*` 回 405、根路径可写），在模拟器上实测「测试连接」→ 第 1 次 PUT 405、第 2 次 PUT 根路径 201、DELETE 清理，地址栏自动变为根路径；「保存并同步」成功上传 1663 字节的真实快照 JSON。截图见 `screenshots/r18_webdav_autofix.png`、`r18_webdav_synced.png`。
 
+## 第二十轮：WebDAV 双向同步（v1.0.3）
+
+**修复的问题**：旧实现只有 `exportSnapshot() → PUT`，是**本地全量覆盖远程**。新手机装好 APP、本地还是空库时点一次「保存并同步」，就会把远程已有清单抹掉。
+
+### 数据模型先补齐（Room v1 → v2）
+
+| 字段 | 作用 |
+| --- | --- |
+| `uid` | 跨设备稳定的 UUID。本地自增 `id` 在两台设备上都从 1 开始，不能用来认记录；父子关系在快照里也改用 `parentUid` |
+| `updatedAt` | 每次编辑（新增 / 完成 / 取消完成 / 改优先级 / 改分类 / 删除）都刷新；`0` 表示时间戳缺失（老数据） |
+| `deletedAt` | 删除墓碑。删除不再物理删行，否则「删掉了」这件事没法传给另一台设备；所有业务查询都过滤墓碑 |
+
+迁移用 `MIGRATION_1_2`：老行现场生成 `uid = lower(hex(randomblob(16)))` 并建唯一索引，`updatedAt` 退化成 `createdAt`。启动时 `ensureSyncMeta()` 幂等兜底。设置里新增机器可读的 `lastSyncAt` / `syncBase` / `syncRevision` / `deviceId`，与给人看的 `lastSync` 文案分开存。
+
+### 同步流程（`SyncEngine`）
+
+找可用目录 → GET 远程 → 读本地（含墓碑）→ 逐记录合并 → 落地本地 → 必要时 PUT 回远程 → 保存状态。整轮成功才写 `lastSyncAt / base / revision`，中途失败不留半截状态；`Mutex` 串行化，连点两次不会并发写。远程文件读不懂时**直接中止**，绝不当成空文件覆盖。
+
+### 合并规则（`SyncMerge`，纯 Kotlin、15 个 JVM 单测）
+
+策略判定：
+
+| 情况 | 处理 |
+| --- | --- |
+| 远程没有备份 | 发布本地 |
+| **缺 `lastSyncAt` + 远程已有数据 + 本地无历史数据** | **以远程为准**，不回写覆盖 |
+| 缺 `lastSyncAt` 但本地已有自己建的数据 | 并集合并，两边都不丢 |
+| 其余 | 常规双向三方合并 |
+
+逐记录规则（合并是**并集**，不是替换）：
+
+1. 只在单边出现的记录一律保留 —— 这是「不丢远程记录」的根本保证。
+2. 有 `base` 时做**字段级三方合并**：某字段只有一边相对 base 变了就取该边；两边改的是**不同字段**则两者都保留（例如本地改标题、远程改优先级，合并后两个改动都在）。
+3. 同一字段两边都改且值不同 → 取 `effectiveTime`（删除 > 编辑 > 完成 > 创建）较新的一方；**时间相同或都缺失 → 远程优先**，裁决确定性、可重复。
+4. `base` 缺失时退化为用 `lastSyncAt` 判断「谁在上次同步之后改过」，逻辑相同。
+5. 时间戳缺失用 `completedAt` / `createdAt` 兜底，仍是 0 就按「无时间戳」走第 3 条的确定性规则。
+6. 删除 vs 编辑：只有删除时间**严格晚于**对方最后编辑时间、且对方有有效时间戳时才允许删除；时间相同或时间戳缺失一律**保留记录**（宁可多留不误删）。删除被拒时保留活着那一侧，避免墓碑的空字段把内容洗掉。
+
+### 幂等与版本状态
+
+`fingerprint()` 只编码记录内容（按 uid / name 排序、长度前缀），不看 `revision / exportedAt / deviceId / lastSyncAt`。内容没变就不发 PUT，`revision` 也不虚增；`base` 存规范化后的合并结果。v1 旧备份可读（`id → v1-<id>`、时间戳记缺失），首次同步会把它无损升级成 v2。
+
+**实测**（模拟器 + 本地模拟 WebDAV，远程预置一份旧版 v1 备份含 A/B 两条）：新装正式包空库首次同步 → 请求序列 `探针 PUT → DELETE → GET → PUT(升级为 v2)`，远程 A/B **一条没少**并拉回本地；第二次同步只有 `探针 PUT → DELETE → GET`，**没有写远程**，`revision` 保持 1；本地新增一条后再同步 → 远程变成 3 条（本地新增 + A + B），`revision=2`。另测 v1 数据库升级到 v2，老数据完整、无崩溃。截图 `screenshots/r19_first_sync_pulled.png`、`r19_db_migration.png`。
+
 ## 技术栈
 
 - Kotlin 2.0.21 · Jetpack Compose（BOM 2024.12.01）· Material 3
@@ -224,7 +268,7 @@
 - DataStore Preferences 保存设置（皮肤、WebDAV 配置、上次同步）
 - 手势：`pointerInput` + `awaitEachGesture` 自绘双向滑动，未使用第三方库
 - 语音输入：系统 `RecognizerIntent`（无需自建识别服务）
-- WebDAV：`HttpURLConnection` 实现 PUT 探针探活 + PUT 备份 + DELETE 清理，无额外网络库（不用 PROPFIND）
+- WebDAV：`HttpURLConnection` 实现 PUT 探针探活 + GET 下载 + PUT 备份 + DELETE 清理，无额外网络库（不用 PROPFIND）；双向合并为纯 Kotlin 实现，快照编解码用系统 `org.json`，兼容 v1 旧备份
 
 ## 目录结构
 
@@ -233,7 +277,13 @@ Quandian/
 ├── app/src/main/java/com/quandian/app/
 │   ├── MainActivity.kt             # 边到边、语音输入 launcher
 │   ├── data/                       # Room 实体 / DAO / 仓库 / 种子数据
-│   ├── sync/WebDavClient.kt        # WebDAV 探活与上传
+│   ├── sync/
+│   │   ├── WebDavClient.kt         # 探活 / 下载 / 上传（含 405 自动纠错）
+│   │   ├── SyncModels.kt           # 快照模型（纯 Kotlin）
+│   │   ├── SyncMerge.kt            # 双向三方合并 + 内容指纹
+│   │   ├── SnapshotCodec.kt        # v2 编解码，兼容 v1 旧备份
+│   │   ├── SyncEngine.kt           # 同步编排与状态落盘
+│   │   └── DavUrl.kt               # 地址格式校验
 │   └── ui/
 │       ├── MainScreen.kt           # 今日清单 + 页面切换 + 提示条
 │       ├── MainViewModel.kt        # UiState / 面板 / 动作
@@ -253,7 +303,7 @@ Quandian/
 # 环境：JDK 17 + Android SDK（compileSdk 35）
 ./gradlew assembleDebug          # 真机调试包
 ./gradlew assembleRelease        # 正式包（自动找 keystore/ 里的证书，找不到就用 debug 证书签名）
-./gradlew testDebugUnitTest      # 单元测试（任务树 / 统计序列）
+./gradlew testDebugUnitTest      # 单元测试（任务树 / 统计序列 / 地址校验 / 双向合并 15 例）
 ./gradlew lintDebug              # Lint 静态检查
 ```
 
@@ -265,7 +315,7 @@ Quandian/
 安装到手机：
 
 ```bash
-adb install -r app/build/outputs/apk/debug/doit-1.0.2-debug.apk
+adb install -r app/build/outputs/apk/debug/doit-1.0.3-debug.apk
 ```
 
 - 调试包包名 `com.quandian.app.debug`，可与正式包共存，桌面显示「doit · 调试」
@@ -275,8 +325,8 @@ adb install -r app/build/outputs/apk/debug/doit-1.0.2-debug.apk
 
 ```
 dist/
-├── doit-1.0.2-debug.apk     # 调试包，包名 com.quandian.app.debug，桌面显示「doit · 调试」，可与正式包共存（含示例分类/待办 + 一年演示记录）
-├── doit-1.0.2-release.apk   # 正式包，包名 com.quandian.app（keystore/quandian-release.jks 签名），零内置数据
+├── doit-1.0.3-debug.apk     # 调试包，包名 com.quandian.app.debug，桌面显示「doit · 调试」，可与正式包共存（含示例分类/待办 + 一年演示记录）
+├── doit-1.0.3-release.apk   # 正式包，包名 com.quandian.app（keystore/quandian-release.jks 签名），零内置数据
 └── SHA256SUMS.txt               # 校验和
 
 screenshots/                     # 验收截图：01–15 模拟器（1080×2400 / Android 15），real_* 真机
@@ -292,6 +342,7 @@ screenshots/                     # 验收截图：01–15 模拟器（1080×2400
                                  # r15_* 去默认分类（只剩「全部」）/ 优先级蓝橘红 / 数量挪到箭头下方 / 动作按钮等距
                                  # r16_* 删除确认弹窗等宽大按钮，r17_* 删除线浅灰 + 完成百分比
                                  # r18_* WebDAV 405 自动纠错：地址回填 / 同步成功
+                                 # r19_* 首次同步不覆盖远程（远程数据拉回）/ v1→v2 数据库迁移
 ```
 
 真机验收环境：华为 NAM-AL00（1080×2340 / density 480，Android 12 底座的 HarmonyOS）。逐项验过：主界面渲染、右滑完成、左滑四动作、优先级/分类/子任务面板、新建任务置顶、分类管理、删除确认、统计页周/月/年三种视图；第二轮 8 项优化装包复核过中文日期、无衬线字形、右侧优先级 tag、热力图点击气泡；第三轮 5 项修复在真机上逐条复核过进度环层级、左滑四角干净度、三种图表气泡尾尖、滚动时头部固定、周/年视图布局。

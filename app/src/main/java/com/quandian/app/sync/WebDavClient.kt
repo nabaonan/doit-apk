@@ -181,6 +181,55 @@ object WebDavClient {
         }
     }
 
+    /** 用户填的地址规范化成一个「带尾斜杠的目录」，下载和上传必须落在同一个目录 */
+    fun directoryOf(raw: String): String = normalize(raw).trimEnd('/') + "/"
+
+    /**
+     * 读取远程快照。404/410 表示远程还没有备份文件（返回 null）；
+     * 其它非 2xx 一律报错，绝不当成「远程为空」，否则会拿本地数据覆盖掉看不懂的内容。
+     */
+    suspend fun fetch(dir: String, user: String, pass: String, fileName: String): Result<String?> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val target = dir.trimEnd('/') + "/" + fileName
+                val conn = open(target, "GET", user, pass)
+                val code = conn.responseCode
+                val host = URL(target).host
+                when {
+                    code == 404 || code == 410 -> {
+                        conn.disconnect()
+                        null
+                    }
+                    code == 401 || code == 403 -> {
+                        conn.disconnect()
+                        throw IOException(diagnose(code, host, target, null))
+                    }
+                    code in 200..299 -> {
+                        val text = conn.inputStream.bufferedReader().use { it.readText() }
+                        conn.disconnect()
+                        text
+                    }
+                    else -> {
+                        conn.disconnect()
+                        throw IOException("读取远程数据失败（$code）")
+                    }
+                }
+            }
+        }
+
+    /** 把合并后的快照写到指定目录（目录已由 [test] 探测过） */
+    suspend fun put(dir: String, user: String, pass: String, fileName: String, text: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val target = dir.trimEnd('/') + "/" + fileName
+                val reply = request(target, "PUT", user, pass, text.toByteArray())
+                if (reply.code !in 200..299) {
+                    throw IOException(diagnose(reply.code, URL(target).host, target, reply.error))
+                }
+                Unit
+            }
+        }
+
     private fun normalize(url: String): String {
         val trimmed = url.trim()
         return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed
