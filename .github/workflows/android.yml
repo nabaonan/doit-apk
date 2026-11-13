@@ -185,7 +185,7 @@ jobs:
           EOF
 
       - name: 构建 Release APK
-        run: gradle --no-daemon assembleRelease
+        run: gradle --no-daemon assembleRelease 2>&1 | tee -a ci-build.log
 
       - name: 规整产物名（doit-<tag>-release.apk）
         run: |
@@ -210,3 +210,25 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+
+      # 与 build job 同理：日志回传到 ci-log-release 分支，没有 token 也能排障
+      - name: 回传构建日志到 ci-log-release 分支
+        if: always()
+        continue-on-error: true
+        run: |
+          set -u
+          {
+            echo "run_number: ${GITHUB_RUN_NUMBER}"
+            echo "ref: ${GITHUB_REF}"
+            echo "sha: ${GITHUB_SHA}"
+            echo "status: ${{ job.status }}"
+            echo "----------------------------------------"
+            [ -f ci-build.log ] && tail -c 200000 ci-build.log || echo "(没有捕获到 gradle 输出)"
+          } > ci-report.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan ci-log-release-report
+          git rm -rq --cached .
+          git add -f ci-report.txt
+          git commit -qm "release report #${GITHUB_RUN_NUMBER} [${{ job.status }}]"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci-log-release
