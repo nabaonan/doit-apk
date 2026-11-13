@@ -21,12 +21,13 @@ val releaseStorePath: String? = System.getenv("QUANDIAN_KEYSTORE")
 // 打 v1.2.3 这个 tag，出来的就是 versionName=1.2.3、versionCode=10203；
 // 没 tag（本地随便构建 / workflow_dispatch）时退回 1.0.0，保证一定能出包。
 fun gitOutput(vararg args: String): String? = runCatching {
-    val proc = ProcessBuilder(listOf("git") + args)
-        .directory(rootProject.projectDir)
-        .redirectErrorStream(true)
-        .start()
-    val text = proc.inputStream.bufferedReader().use { it.readText() }.trim()
-    if (proc.waitFor() == 0 && text.isNotEmpty()) text else null
+    // 必须走 providers.exec：直接 ProcessBuilder 会在 configuration cache 阶段被判定为非法外部进程
+    val text = providers.exec {
+        workingDir = rootProject.projectDir
+        commandLine(listOf("git") + args)
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim()
+    text.ifEmpty { null }
 }.getOrNull()
 
 val semverTag = Regex("""v(\d+)\.(\d+)\.(\d+)$""")

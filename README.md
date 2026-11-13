@@ -3,7 +3,7 @@
 一款清新薄荷绿的待办应用（Kotlin + Jetpack Compose，原名「圈点 QUANDIAN」，第四轮更名 doit）：
 浅薄荷绿底 + 纯白卡片 + 薄荷绿主色 `#34C7A8`，另一种配色是深夜青灰 + 薄荷绿的夜间模式（全部色彩走设计令牌，支持运行时换肤与深浅切换），右滑让进度从卡片最左端长出来，拖到底就完成。
 
-- 源码仓库：<https://github.com/nabaonan/doit-apk>（推 `main` 自动跑测试并出 Debug 包，打 `v*` tag 出发正式包 + Release）
+- 源码仓库：<https://github.com/nabaonan/doit-apk>（只有打 `v*` tag 才触发构建：Debug 包 + 正式包 + Release，版本号由 tag 推导）
 - 视觉稿：`design/prototype/index.html`（可交互 HTML 原型）
 - 设计效果图：`design/圈点-APP设计稿.png`
 
@@ -318,6 +318,7 @@ Gradle 产物统一命名成 `doit-<versionName>-<buildType>.apk`（`app/build.g
 - **新建任务置顶**：新任务 `sortOrder = min - 1` 插在第一位，插入后主动回顶（`MainViewModel.scrollTop`），避免 `LazyColumn` 保持旧视口锚点让新任务藏在视口上方。
 - **字体**：全局系统无衬线（`FontFamily.SansSerif`，华为/鸿蒙上落到 HarmonyOS Sans，模拟器为 Noto Sans），标题、数字、正文同一族，不再使用衬线。不打包字体文件，APK 更轻、渲染更稳。
 - **顶部日期**：全中文「2026年11月13日 星期五」，星期用 `WEEKDAYS_CN` 映射，不出现英文缩写。
+- **弹窗里的主次动作等宽**：「确认删除」「删除分类」两个按钮由 `SheetActions` 统一渲染——左右各占一半（`weight(1f)` + 10dp 间隔）、48dp 高、13dp 圆角，左侧危险动作用 `DangerBg` + 红字，右侧「先留着」用 `Surface2` + 淡描边；不再是小胶囊并排，盲按也点得准。`screenshots/r16_confirm_delete.png`
 - **示例数据只在调试包**：`BuildConfig.DEBUG` 为真时才 `ensureSeeded()` + `seedDemoHistory()`（六条示例待办 + 一年完成记录）；正式包一条预置数据都不写（连默认分类都没有），列表与统计页从零开始。见 `TaskRepository` 与 `MainViewModel.init`。
 - **两套配色**：浅色 `QDPalette.Mint`（浅薄荷绿底 + 纯白卡片 + `#34C7A8`）与深色 `QDPalette.Midnight`（深夜青灰 + 薄荷），设置页「主题」三档可切；所有颜色只从 `QD` 令牌取，换肤不改界面代码。
 - **白字规则**：凡是"实心彩色块"（选中胶囊、FAB、主按钮、提示条）一律白字，底走 `accentFill` 或 `fillFor()`——后者按比例压暗浅彩，直到白字对比度 ≥ 2.6:1，色相不变；反过来，深色模式里 accent 本身是亮薄荷，压在它上面的字才用深墨 `OnAccent`。

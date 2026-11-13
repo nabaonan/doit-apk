@@ -112,38 +112,70 @@ fun QDTextField(
     )
 }
 
+private val ActionShape = RoundedCornerShape(13.dp)
+
+/**
+ * 弹窗里的主行动按钮：整行高度 48dp，横向由 [SheetActions] 平分，
+ * 手指不用瞄着一个小胶囊点，盲按也基本能中。
+ */
 @Composable
-fun QdChip(
+private fun SheetActionButton(
     label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     danger: Boolean = false,
+    onClick: () -> Unit,
 ) {
-    val bg = when {
-        selected -> QD.AccentFill
-        danger -> QD.DangerBg
-        else -> QD.Surface2
-    }
-    val border = when {
-        selected -> QD.AccentFill
-        danger -> QD.Danger.copy(alpha = 0.5f)
-        else -> QD.Line
-    }
-    val fg = when {
-        selected -> QD.OnAccent
-        danger -> QD.Danger
-        else -> QD.InkSoft
-    }
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
+    val bg = if (danger) QD.DangerBg else QD.Surface2
+    val border = if (danger) QD.Danger.copy(alpha = 0.42f) else QD.Line
+    val fg = if (danger) QD.Danger else QD.InkSoft
+    Box(
+        modifier = modifier
+            .height(48.dp)
+            .clip(ActionShape)
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(999.dp))
-            .tapFeedback { onClick() }
-            .padding(horizontal = 13.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .border(1.dp, border, ActionShape)
+            .tapFeedback(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 12.sp, color = fg)
+        Text(
+            label,
+            fontSize = 13.sp,
+            color = fg,
+            fontWeight = if (danger) FontWeight.Medium else FontWeight.Normal,
+            letterSpacing = 0.5.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * 两个等宽按钮并排：[primaryLabel] 在左（危险动作用红调），[secondaryLabel] 在右。
+ * 宽度各占一半、中间只留 10dp，点哪边都是一大片，不会有"点不准"的感觉。
+ */
+@Composable
+private fun SheetActions(
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    secondaryLabel: String,
+    onSecondary: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SheetActionButton(
+            label = primaryLabel,
+            modifier = Modifier.weight(1f),
+            danger = true,
+            onClick = onPrimary,
+        )
+        SheetActionButton(
+            label = secondaryLabel,
+            modifier = Modifier.weight(1f),
+            onClick = onSecondary,
+        )
     }
 }
 
@@ -633,22 +665,24 @@ private fun CategoryManageCard(
 private fun ConfirmDeleteBody(node: TaskNode?, onConfirm: () -> Unit, onKeep: () -> Unit) {
     val n = node?.children?.size ?: 0
     SheetDesc("「${node?.task?.title ?: ""}」下面还挂着 $n 个子任务，删掉它，这些子任务会一起消失。")
-    Spacer(Modifier.height(16.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        QdChip(label = "一起删掉", selected = false, onClick = onConfirm, danger = true)
-        QdChip(label = "先留着", selected = false, onClick = onKeep)
-    }
+    SheetActions(
+        primaryLabel = "一起删掉",
+        onPrimary = onConfirm,
+        secondaryLabel = "先留着",
+        onSecondary = onKeep,
+    )
     SheetNote("删除不会进回收站，找不回来。")
 }
 
 @Composable
 private fun ConfirmCategoryBody(name: String, count: Int, onConfirm: () -> Unit, onKeep: () -> Unit) {
     SheetDesc("「$name」分类下还有 $count 件待办，删除后它们会变成未分类。")
-    Spacer(Modifier.height(16.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        QdChip(label = "删除分类", selected = false, onClick = onConfirm, danger = true)
-        QdChip(label = "先留着", selected = false, onClick = onKeep)
-    }
+    SheetActions(
+        primaryLabel = "删除分类",
+        onPrimary = onConfirm,
+        secondaryLabel = "先留着",
+        onSecondary = onKeep,
+    )
     SheetNote("删除分类不会删掉待办，只是换了个归属。")
 }
 
