@@ -293,6 +293,9 @@ CI 打正式包时通过仓库 Secrets 提供：`KEYSTORE_BASE64` / `KEYSTORE_PA
 - 打 `v*` tag：额外构建签名过的正式包，artifact 名 `doit-release-apk`，并以 `doit-<tag>-release.apk` 挂到 GitHub Releases
 - 也可以用 `workflow_dispatch` 手动触发
 
+CI 不经过 wrapper：`gradle/actions/setup-gradle` 直接装官方 Gradle 8.11.1 并调用 `gradle`，
+因为 `gradle-wrapper.properties` 的 `distributionUrl` 指向腾讯镜像，境外 runner 拉 130MB 常常慢到超时。
+
 Gradle 产物统一命名成 `doit-<versionName>-<buildType>.apk`（`app/build.gradle.kts` 的 `androidComponents.onVariants`），
 本地 `assembleDebug` 与 CI 下到的文件名一致，不用再猜 `app-debug.apk` 是哪个版本。
 
