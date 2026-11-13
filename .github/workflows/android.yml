@@ -60,14 +60,14 @@ jobs:
           validate-wrappers: false
 
       - name: 单元测试
-        run: gradle --no-daemon testDebugUnitTest
+        run: gradle --no-daemon testDebugUnitTest 2>&1 | tee -a ci-build.log
 
       - name: Lint 检查
-        run: gradle --no-daemon lintDebug
+        run: gradle --no-daemon lintDebug 2>&1 | tee -a ci-build.log
         continue-on-error: true
 
       - name: 构建 Debug APK
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug 2>&1 | tee -a ci-build.log
 
       - name: 列出产物
         run: ls -lh app/build/outputs/apk/debug/
@@ -90,6 +90,30 @@ jobs:
             app/build/reports/lint-results-*.html
           if-no-files-found: ignore
           retention-days: 7
+
+      # 私有仓库没有 token 读不到 Actions 日志，这里把构建输出回传到 ci-log 分支，
+      # 本地 `git fetch origin ci-log` 就能看，不用再截图往返。
+      # continue-on-error：这一步自身失败不影响构建结论。
+      - name: 回传构建日志到 ci-log 分支
+        if: always()
+        continue-on-error: true
+        run: |
+          set -u
+          {
+            echo "run_number: ${GITHUB_RUN_NUMBER}"
+            echo "ref: ${GITHUB_REF}"
+            echo "sha: ${GITHUB_SHA}"
+            echo "status: ${{ job.status }}"
+            echo "----------------------------------------"
+            [ -f ci-build.log ] && tail -c 200000 ci-build.log || echo "(没有捕获到 gradle 输出)"
+          } > ci-report.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan ci-log-report
+          git rm -rq --cached .
+          git add -f ci-report.txt
+          git commit -qm "ci report #${GITHUB_RUN_NUMBER} [${{ job.status }}]"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci-log
 
   release:
     name: 打正式包
