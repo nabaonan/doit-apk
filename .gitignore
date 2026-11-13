@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 本地模拟器（AVD 动辄几百 MB）
+.emu/
+
+# 签名材料不入库
+keystore/
+keystore.properties
+*.jks
+*.keystore
+
+# 构建产物
+dist/
+*.apk
+*.aab
+captures/
+
+# 日志
+*.log

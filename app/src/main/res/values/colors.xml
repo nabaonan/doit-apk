@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 冷启动窗口底色：与 Compose 里的 QD.Screen 保持一致，避免启动瞬间闪一层别的色 -->
+    <color name="paper">#EEF7F2</color>
+    <color name="launcher_background">#EEF7F2</color>
+</resources>
