@@ -56,6 +56,8 @@ jobs:
           # 固定用官方发行版：wrapper 里的 distributionUrl 指向腾讯镜像，
           # 在境外 runner 上拉 130MB 容易慢到超时，这里直接装官方 8.11.1
           gradle-version: '8.11.1'
+          # CI 不调用 ./gradlew，没必要再校验 wrapper jar（校验不过会直接失败）
+          validate-wrappers: false
 
       - name: 单元测试
         run: gradle --no-daemon testDebugUnitTest
@@ -131,6 +133,8 @@ jobs:
           # 固定用官方发行版：wrapper 里的 distributionUrl 指向腾讯镜像，
           # 在境外 runner 上拉 130MB 容易慢到超时，这里直接装官方 8.11.1
           gradle-version: '8.11.1'
+          # CI 不调用 ./gradlew，没必要再校验 wrapper jar（校验不过会直接失败）
+          validate-wrappers: false
 
       # 仓库里不放私钥：配好这四个 secret 就用正式证书签名，
       # 没配则回退 debug 证书（包仍可安装，只是不能直接上架）。
