@@ -49,22 +49,40 @@ class SyncEngine(
             val st = settings.current()
             val deviceId = settings.deviceId()
             val base = st.syncBase.takeIf { it.isNotBlank() }?.let { SnapshotCodec.decode(it) }
-            val ctx = SyncContext(
-                lastSyncAt = st.lastSyncAt,
-                base = base,
-                localRevision = st.syncRevision,
-            )
 
             // 复用 405 自动纠错：探测出一个确实可写的目录，下载和上传都落在它下面
             val probe = dav.test(url, user, pass).getOrThrow()
             val dir = probe.workingUrl ?: WebDavClient.directoryOf(url)
 
             val remoteText = dav.fetch(dir, user, pass, SnapshotCodec.BACKUP_FILE).getOrThrow()
-            val remote = when {
+            val downloaded = when {
                 remoteText.isNullOrBlank() -> null
                 else -> SnapshotCodec.decode(remoteText)
                     ?: throw IOException("远程备份不是可识别的 doit 数据，已中止同步以免覆盖")
             }
+
+            // 服务器返回了比上次成功同步更旧的副本（缓存 / PUT 没生效 / 读到了另一份旧文件）。
+            // 这种文件的旧值一旦参与三方合并，会被误当成「远程新改动」把本机刚改的数据回滚掉。
+            val staleRemote = downloaded?.let {
+                SyncMerge.isStaleRemote(it, st.lastSyncAt, st.syncRevision)
+            } ?: false
+
+            // base 意外丢失时，只要远程没有比本机更新的版本，就把远程当作共同基点：
+            // 这样远程恒为「没改动」，本机同步后的所有改动一定会被判成有效变更。
+            val effectiveBase = base ?: if (
+                !staleRemote && st.lastSyncAt > 0L && downloaded != null &&
+                downloaded.revision <= st.syncRevision
+            ) SyncMerge.canonical(downloaded) else null
+
+            // 旧副本不参与合并：有 base 就用 base 顶替远程（等于远程没变），没有就当作远程为空。
+            val remote = if (staleRemote) effectiveBase else downloaded
+
+            val ctx = SyncContext(
+                lastSyncAt = st.lastSyncAt,
+                base = effectiveBase,
+                localRevision = st.syncRevision,
+                staleRemote = staleRemote,
+            )
 
             val (taskEntities, categoryEntities) = repo.snapshotEntities()
             val local = SnapshotCodec.fromEntities(

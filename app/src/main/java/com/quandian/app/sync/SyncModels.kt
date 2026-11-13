@@ -69,11 +69,18 @@ data class SyncSnapshot(
     }
 }
 
-/** 本机同步状态。[lastSyncAt] 为 0 表示从未成功同步过。 */
+/**
+ * 本机同步状态。
+ * - [lastSyncAt] 为 0 表示从未成功同步过。
+ * - [base] 是上一次成功同步后双方共同的快照，判断「谁改过」的唯一可靠依据。
+ * - [staleRemote] 表示这次读到的远程文件比上一次成功同步还旧（服务器缓存 / 没覆盖成功），
+ *   此时绝不能把它的旧值当成「远程新改动」回滚本机。
+ */
 data class SyncContext(
     val lastSyncAt: Long = 0L,
     val base: SyncSnapshot? = null,
     val localRevision: Long = 0L,
+    val staleRemote: Boolean = false,
 )
 
 enum class SyncStrategy {
@@ -95,12 +102,17 @@ data class SyncOutcome(
     /** 是否需要把合并结果写回远程 */
     val needUpload: Boolean,
     val conflicts: Int,
+    /** 远程文件是旧副本，本轮按本机数据重新发布 */
+    val staleRemote: Boolean = false,
 ) {
     val summary: String
-        get() = when (strategy) {
-            SyncStrategy.FIRST_SYNC_REMOTE_WINS -> "首次同步 · 以远程数据为准"
-            SyncStrategy.FIRST_SYNC_UNION -> "首次同步 · 本地与远程合并，未覆盖远程"
-            SyncStrategy.PUBLISH_LOCAL -> "远程为空 · 已发布本地数据"
-            SyncStrategy.MERGE -> if (conflicts > 0) "双向同步 · 已处理 $conflicts 处冲突" else "双向同步 · 数据已一致"
+        get() = when {
+            staleRemote && strategy == SyncStrategy.PUBLISH_LOCAL -> "远程是旧副本 · 已按本机数据重新发布"
+            staleRemote -> "远程是旧副本 · 已保留本机改动并重新发布"
+            strategy == SyncStrategy.FIRST_SYNC_REMOTE_WINS -> "首次同步 · 以远程数据为准"
+            strategy == SyncStrategy.FIRST_SYNC_UNION -> "首次同步 · 本地与远程合并，未覆盖远程"
+            strategy == SyncStrategy.PUBLISH_LOCAL -> "远程为空 · 已发布本地数据"
+            conflicts > 0 -> "双向同步 · 已处理 $conflicts 处冲突"
+            else -> "双向同步 · 数据已一致"
         }
 }

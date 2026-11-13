@@ -10,13 +10,20 @@ package com.quandian.app.sync
  *
  * 冲突规则（全部确定性，重复跑结果一致）：
  * 1. 只在单边出现的记录一律保留 —— 合并是并集，绝不拿本地全量替换远程。
- * 2. 同一字段只有一边相对 base 变了 → 取改过的那边；两边改了不同字段 → 两边都保留。
- * 3. 同一字段两边都改且值不同 → 取 effectiveTime 较新的一边；
+ * 2. **本地在同步后改过、远程与 base 完全一致 → 整条以本地为准**。这条是硬保证：
+ *    只要远程没动过，本机刚做的任何改动（含时间戳缺失的老记录）都不会被远程覆盖。
+ * 3. 同一字段只有一边相对 base 变了 → 取改过的那边；两边改了不同字段 → 两边都保留。
+ * 4. 同一字段两边都改且值不同 → 取 effectiveTime 较新的一边；
  *    时间相同或都缺失 → 远程优先（远程始终是最不该被覆盖的一方）。
- * 4. 删除 vs 编辑：只有删除时间严格晚于对方最后编辑时间、且对方有有效时间戳时才允许删除；
- *    时间相同或时间戳缺失一律保留记录，宁可多留也不误删。
+ * 5. 删除 vs 编辑：删除发生在上次成功同步之后、且活记录没有同步后的编辑 → 删除生效；
+ *    双方都动过则比较时间，删除严格更晚才生效；时间相同/缺失一律保留活记录，
+ *    宁可多留也不误删。旧版 v1 记录没有时间戳，不能再靠 `hasTimestamp` 一票否决删除。
+ * 6. 远程文件版本落后（缓存 / 未覆盖成功）→ 忽略它的旧值并强制重新发布本机数据。
  */
 object SyncMerge {
+
+    /** 允许设备间时钟偏差，超过这个差值才认定「远程文件是旧副本」 */
+    private const val CLOCK_SKEW_MS = 10L * 60L * 1000L
 
     fun merge(
         local: SyncSnapshot,
@@ -60,7 +67,7 @@ object SyncMerge {
             tasks = tasks,
             categories = categories,
         )
-        val needUpload = fingerprint(body) != (remote?.let { fingerprint(it) } ?: "")
+        val needUpload = ctx.staleRemote || fingerprint(body) != (remote?.let { fingerprint(it) } ?: "")
         val nextRevision = if (needUpload) {
             maxOf(ctx.localRevision, remote?.revision ?: 0L) + 1
         } else {
@@ -79,6 +86,7 @@ object SyncMerge {
             changedForLocal = countChanged(local, body),
             needUpload = needUpload,
             conflicts = conflicts,
+            staleRemote = ctx.staleRemote,
         )
     }
 
@@ -89,6 +97,22 @@ object SyncMerge {
         // 新装 APP 但用户已经先建了几条：并集，两边都不丢
         ctx.lastSyncAt == 0L && remote.hasData -> SyncStrategy.FIRST_SYNC_UNION
         else -> SyncStrategy.MERGE
+    }
+
+    /**
+     * 远程文件是不是「上一次成功同步之前」的旧副本。
+     * 命中时不能拿它参与三方比较：否则旧值会被当成远程新改动，把本机改动回滚掉。
+     */
+    fun isStaleRemote(remote: SyncSnapshot, lastSyncAt: Long, localRevision: Long): Boolean {
+        if (lastSyncAt <= 0L) return false
+        // 远程版本比本机还新，说明别的设备确实写过，绝不能当旧副本忽略
+        if (remote.revision > localRevision) return false
+        // 上一轮我们已经写过 v2 文件；还读回 v1 说明服务器返回的是旧内容
+        if (remote.schemaVersion < SyncSnapshot.SCHEMA_VERSION) return true
+        // 我们自己写的 revision 单调递增，读到更小的必然是旧副本
+        if (remote.revision > 0L && remote.revision < localRevision) return true
+        // 兜底：其它设备时钟可能略慢，留出 10 分钟容差
+        return remote.exportedAt > 0L && remote.exportedAt + CLOCK_SKEW_MS < lastSyncAt
     }
 
     // ---------------------------------------------------------------- 任务
@@ -125,30 +149,51 @@ object SyncMerge {
     private fun mergeTask(l: SyncTask, r: SyncTask, b: SyncTask?, lastSyncAt: Long): Pair<SyncTask, Int> {
         val lDel = l.deletedAt
         val rDel = r.deletedAt
-        if (lDel != null || rDel != null) {
-            val deleteWins = when {
-                lDel != null && rDel != null -> true
-                lDel != null -> r.hasTimestamp && lDel > r.effectiveTime
-                rDel != null -> l.hasTimestamp && rDel > l.effectiveTime
-                else -> false
-            }
-            if (deleteWins) {
-                val tomb = when {
-                    lDel != null && rDel != null -> if (lDel >= rDel) l else r
-                    lDel != null -> l
-                    else -> r
-                }
-                return tomb to 0
-            }
-            // 删除没能胜出：直接保留活着那一侧。墓碑侧除了「删除」之外没有有效字段
-            // （标题等都是空的），拿它参与字段合并反而会把活记录的内容洗掉。
-            val survivor = if (l.isDeleted) r else l
-            return survivor.copy(deletedAt = null) to 1
+        if (lDel == null && rDel == null) return mergeTaskFields(l, r, b, lastSyncAt)
+
+        // 两边都删了：取较晚的墓碑
+        if (lDel != null && rDel != null) return (if (lDel >= rDel) l else r) to 0
+
+        val dead = if (lDel != null) l else r
+        val live = if (lDel != null) r else l
+        val deadAt = dead.deletedAt!!
+
+        // 活记录在「上次成功同步之后」有没有实质编辑。
+        // 有 base 时直接比内容；没有 base 时退化为时间戳判断，时间戳缺失视为没编辑过。
+        val liveEditedSinceSync = when {
+            b != null -> b.isDeleted || live.content() != b.content()
+            else -> live.effectiveTime > lastSyncAt
         }
-        return mergeTaskFields(l, r, b, lastSyncAt)
+        // 从未成功同步过时没有任何基线，无法判断删除是不是「最近」发生的，保守保留活记录
+        val deletedSinceSync = lastSyncAt > 0L && deadAt > lastSyncAt
+
+        val deleteWins = when {
+            // 删除发生在同步之后、对方没编辑过 → 删除生效（旧版无时间戳记录也走这里）
+            !liveEditedSinceSync && deletedSinceSync -> true
+            // 双方都动过：只有删除时间严格更晚、且对方时间可信时才删
+            live.hasTimestamp && deadAt > live.effectiveTime -> true
+            else -> false
+        }
+        if (deleteWins) {
+            return dead.copy(
+                deletedAt = deadAt,
+                updatedAt = maxOf(dead.updatedAt, deadAt),
+            ) to (if (liveEditedSinceSync) 1 else 0)
+        }
+
+        // 删除没能胜出：保留活着那一侧。若活记录正是本机，本机改动原样留下；
+        // 若本机是墓碑，则本机删除被撤销，拿远程活记录回填，并记一次冲突。
+        val survivor = if (l.isDeleted) r else l
+        return survivor.copy(deletedAt = null) to 1
     }
 
     private fun mergeTaskFields(l: SyncTask, r: SyncTask, b: SyncTask?, lastSyncAt: Long): Pair<SyncTask, Int> {
+        // 硬保证：本机同步后改过、远程还停在上次同步的样子 → 整条以本机为准。
+        // 不能逐字段走 tie()：老记录时间戳为 0 时，tie 会把本机改动判给远程。
+        if (b != null && l.content() != b.content() && r.content() == b.content()) {
+            return l to 0
+        }
+
         var conflicts = 0
         val lt = l.effectiveTime
         val rt = r.effectiveTime
@@ -225,22 +270,41 @@ object SyncMerge {
     ): Pair<SyncCategory, Int> {
         val lDel = l.deletedAt
         val rDel = r.deletedAt
-        if (lDel != null || rDel != null) {
-            val deleteWins = when {
-                lDel != null && rDel != null -> true
-                lDel != null -> r.hasTimestamp && lDel > r.effectiveTime
-                rDel != null -> l.hasTimestamp && rDel > l.effectiveTime
-                else -> false
-            }
-            if (deleteWins) {
-                return (if (lDel != null && rDel != null) (if (lDel >= rDel) l else r) else if (lDel != null) l else r) to 0
-            }
-            // 同理：删除被拒时保留活着那侧，别让墓碑的空字段洗掉分类颜色
-            val survivor = if (l.isDeleted) r else l
-            return survivor.copy(
-                deletedAt = null,
-                updatedAt = maxOf(l.updatedAt, r.updatedAt),
-            ) to 1
+        if (lDel == null && rDel == null) return mergeCategoryFields(l, r, b, lastSyncAt)
+        if (lDel != null && rDel != null) return (if (lDel >= rDel) l else r) to 0
+
+        val dead = if (lDel != null) l else r
+        val live = if (lDel != null) r else l
+        val deadAt = dead.deletedAt!!
+        val liveEditedSinceSync = when {
+            b != null -> b.isDeleted || live.content() != b.content()
+            else -> live.effectiveTime > lastSyncAt
+        }
+        val deletedSinceSync = lastSyncAt > 0L && deadAt > lastSyncAt
+        val deleteWins = when {
+            !liveEditedSinceSync && deletedSinceSync -> true
+            live.hasTimestamp && deadAt > live.effectiveTime -> true
+            else -> false
+        }
+        if (deleteWins) {
+            return dead.copy(
+                deletedAt = deadAt,
+                updatedAt = maxOf(dead.updatedAt, deadAt),
+            ) to (if (liveEditedSinceSync) 1 else 0)
+        }
+        val survivor = if (l.isDeleted) r else l
+        return survivor.copy(deletedAt = null, updatedAt = maxOf(l.updatedAt, r.updatedAt)) to 1
+    }
+
+    private fun mergeCategoryFields(
+        l: SyncCategory,
+        r: SyncCategory,
+        b: SyncCategory?,
+        lastSyncAt: Long,
+    ): Pair<SyncCategory, Int> {
+        // 同任务：本机改过、远程没动 → 整条本机为准
+        if (b != null && l.content() != b.content() && r.content() == b.content()) {
+            return l to 0
         }
         var conflicts = 0
         val lt = l.effectiveTime
@@ -273,6 +337,22 @@ object SyncMerge {
         lt > rt -> l
         rt > lt -> r
         else -> r
+    }
+
+    // ---------------------------------------------------------------- 内容指纹
+
+    /**
+     * 记录「用户看得见的内容」指纹，忽略 createdAt / updatedAt 这类元信息，
+     * 专门用来判断「这条记录上次同步之后有没有被真正编辑过」。
+     */
+    private fun SyncTask.content(): String = buildString {
+        field(uid); field(parentUid); field(title); field(category)
+        field(priority); field(timeLabel); field(done); field(completedAt)
+        field(sortOrder); field(depth); field(deletedAt)
+    }
+
+    private fun SyncCategory.content(): String = buildString {
+        field(name); field(colorHex); field(sortOrder); field(deletedAt)
     }
 
     // ---------------------------------------------------------------- 幂等

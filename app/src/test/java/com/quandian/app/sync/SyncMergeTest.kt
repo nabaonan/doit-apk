@@ -221,6 +221,106 @@ class SyncMergeTest {
         assertEquals(0, second.conflicts)
     }
 
+    // ------------------------------------------------- 同步后本地改动不再被远程覆盖
+
+    @Test
+    fun `同步后本地改过_远程未变_整条以本地为准_即使本地时间戳缺失`() {
+        val base = snap(task("a", "原题", updatedAt = 0), revision = 1)
+        val remote = snap(task("a", "原题", updatedAt = 0), revision = 1)
+        val local = snap(task("a", "本地刚改的", done = true, updatedAt = 0), revision = 1)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 1), 300, "d")
+        val a = out.merged.tasks.single()
+        assertEquals("本地刚改的", a.title)
+        assertTrue(a.done)
+        assertTrue(out.needUpload) // 本机改动必须推到远程
+    }
+
+    @Test
+    fun `同步后本地改分类颜色_远程未变_保留本地`() {
+        val base = snap(categories = listOf(cat("工作", "AAAAAA")), revision = 1)
+        val remote = snap(categories = listOf(cat("工作", "AAAAAA")), revision = 1)
+        val local = snap(categories = listOf(cat("工作", "FF0000", updatedAt = 250)), revision = 1)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 1), 300, "d")
+        assertEquals("FF0000", out.merged.categories.single().colorHex)
+    }
+
+    @Test
+    fun `base丢失但远程没更新_用远程回填base后本地改动仍保留`() {
+        val remote = snap(task("a", "原样", updatedAt = 120), revision = 2)
+        val local = snap(task("a", "本地新改", updatedAt = 250), revision = 2)
+        // SyncEngine 在 base 丢失时会把「没有比本机更新的远程」规范化成 base
+        val fallbackBase = SyncMerge.canonical(remote)
+        val out = SyncMerge.merge(local, remote, SyncContext(200, fallbackBase, 2), 300, "d")
+        assertEquals("本地新改", out.merged.tasks.single().title)
+        assertTrue(out.needUpload)
+    }
+
+    @Test
+    fun `旧版无时间戳记录_本地删除生效_不被远程复活`() {
+        val base = snap(task("a", "远程老数据", updatedAt = 0), revision = 1)
+        val remote = snap(task("a", "远程老数据", updatedAt = 0), revision = 1)
+        val local = snap(task("a", "远程老数据", deletedAt = 300, updatedAt = 300), revision = 1)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 1), 400, "d")
+        assertEquals(300L, out.merged.tasks.single().deletedAt)
+        assertTrue(out.needUpload)
+    }
+
+    @Test
+    fun `旧版无时间戳分类_本地删除生效`() {
+        val base = snap(categories = listOf(cat("旧分类")), revision = 1)
+        val remote = snap(categories = listOf(cat("旧分类")), revision = 1)
+        val local = snap(categories = listOf(cat("旧分类", updatedAt = 300, deletedAt = 300)), revision = 1)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 1), 400, "d")
+        assertEquals(300L, out.merged.categories.single().deletedAt)
+    }
+
+    @Test
+    fun `远程删除与本地编辑冲突_保留本地编辑`() {
+        val base = snap(task("a", "原题", updatedAt = 100), revision = 1)
+        val remote = snap(task("a", "原题", deletedAt = 350, updatedAt = 350), revision = 1)
+        val local = snap(task("a", "本地编辑过", updatedAt = 360), revision = 1)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 1), 400, "d")
+        assertNull(out.merged.tasks.single().deletedAt)
+        assertEquals("本地编辑过", out.merged.tasks.single().title)
+        assertTrue(out.conflicts > 0)
+    }
+
+    // ------------------------------------------------------------ 远程旧副本
+
+    @Test
+    fun `远程读到旧版本文件_识别为旧副本`() {
+        val old = snap(task("a", "旧值", updatedAt = 100), revision = 2)
+            .copy(exportedAt = 1000, lastSyncAt = 1000)
+        assertTrue(SyncMerge.isStaleRemote(old, lastSyncAt = 5000, localRevision = 3))
+        // v1 旧文件同样要识别出来
+        val v1 = old.copy(schemaVersion = 1, revision = 0)
+        assertTrue(SyncMerge.isStaleRemote(v1, lastSyncAt = 5000, localRevision = 3))
+    }
+
+    @Test
+    fun `远程版本更新时不当旧副本_首次同步也不当旧副本`() {
+        val newer = snap(task("a", "别的设备新写的", updatedAt = 9000), revision = 9)
+            .copy(exportedAt = 1000)
+        assertFalse(SyncMerge.isStaleRemote(newer, lastSyncAt = 5000, localRevision = 3))
+        assertFalse(SyncMerge.isStaleRemote(newer, lastSyncAt = 0, localRevision = 0))
+    }
+
+    @Test
+    fun `远程是旧副本_强制重新发布且不覆盖本地改动`() {
+        val base = snap(task("a", "上次同步的值", updatedAt = 200), revision = 3)
+        val stale = snap(task("a", "更旧的值", updatedAt = 100), revision = 1)
+            .copy(exportedAt = 100, lastSyncAt = 100)
+        val local = snap(task("a", "本机刚改的", updatedAt = 400), revision = 3)
+        // engine 命中旧副本后会用 base 顶替 remote
+        val ctx = SyncContext(300, base, 3, staleRemote = true)
+        val out = SyncMerge.merge(local, base, ctx, 500, "d")
+        assertEquals("本机刚改的", out.merged.tasks.single().title)
+        assertTrue(out.needUpload)
+        assertTrue(out.staleRemote)
+        assertTrue(out.summary.contains("旧副本"))
+        assertEquals(4L, out.merged.revision)
+    }
+
     @Test
     fun `指纹不受版本与导出时间影响`() {
         val a = snap(task("a", "题", updatedAt = 100), revision = 1)
