@@ -60,7 +60,7 @@ import java.time.LocalDate
 private val WEEKDAYS_CN = listOf("一", "二", "三", "四", "五", "六", "日")
 
 @Composable
-fun MainScreen(vm: MainViewModel, onVoice: () -> Unit) {
+fun MainScreen(vm: MainViewModel) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val page by vm.page.collectAsStateWithLifecycle()
     val sheet by vm.sheet.collectAsStateWithLifecycle()
@@ -158,7 +158,7 @@ fun MainScreen(vm: MainViewModel, onVoice: () -> Unit) {
                     menuOpen = false
                     when (sat) {
                         Satellite.Category -> vm.openSheet(Sheet.Categories)
-                        Satellite.Voice -> onVoice()
+                        Satellite.Calendar -> vm.go(Page.Calendar)
                         Satellite.Stats -> vm.go(Page.Stats)
                         Satellite.Settings -> vm.go(Page.Settings)
                     }
@@ -195,6 +195,16 @@ fun MainScreen(vm: MainViewModel, onVoice: () -> Unit) {
                     onCheckUpdate = { vm.say("当前已是最新版本 v${BuildConfig.VERSION_NAME}") },
                     onToast = vm::say,
                 )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = page == Page.Calendar,
+            enter = slideInHorizontally(tween(340)) { it },
+            exit = slideOutHorizontally(tween(300)) { it },
+        ) {
+            Box(Modifier.fillMaxSize().background(QD.Surface).statusBarsPadding()) {
+                CalendarPage(state = state, onBack = vm::back)
             }
         }
 

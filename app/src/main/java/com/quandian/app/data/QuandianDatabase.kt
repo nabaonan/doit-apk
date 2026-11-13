@@ -24,6 +24,10 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY id ASC")
     suspend fun allIncludingDeleted(): List<TaskEntity>
 
+    /** 月视图用：所有已完成的待办（带完成时间），按完成时间倒序 */
+    @Query("SELECT * FROM tasks WHERE done = 1 AND deletedAt IS NULL AND completedAt IS NOT NULL ORDER BY completedAt DESC")
+    fun observeDone(): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE id = :id AND deletedAt IS NULL")
     suspend fun byId(id: Long): TaskEntity?
 

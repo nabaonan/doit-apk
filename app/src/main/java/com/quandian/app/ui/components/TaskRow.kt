@@ -196,11 +196,14 @@ fun TopTaskRow(
 ) {
     val task = node.task
     val density = LocalDensity.current
-    // 让位距离 = 四个动作槽的实测总宽，滑开时刚好露完
-    val actionWidth = ActionMetrics.widthOf(4)
+    // 让位距离 = 动作槽的实测总宽，滑开时刚好露完。
+    // 已完成的任务只露「删除」一个槽；未完成的露全部四个。
+    val actionCount = if (task.done) 1 else 4
+    val actionWidth = ActionMetrics.widthOf(actionCount)
     val actionPx = with(density) { actionWidth.toPx() }
+    // 已完成也能左滑删除：enabled 始终为真；右滑完成只在未完成时有效
     val state = remember(task.id, task.done, node.hasChildren) {
-        SwipeState(actionWidthPx = actionPx, blocked = node.hasChildren, enabled = !task.done)
+        SwipeState(actionWidthPx = actionPx, blocked = node.hasChildren, enabled = true)
     }
     val scope = rememberCoroutineScope()
     val shake = remember { Animatable(0f) }
@@ -245,12 +248,13 @@ fun TopTaskRow(
                         cb.onBlocked()
                     },
                     onHaptic = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
+                    allowComplete = !task.done,
                 ),
         ) {
             // 动作区底色（只覆盖卡片让开的那部分）
             ActionBackdrop(state, radius = 19.dp, modifier = Modifier.matchParentSize())
 
-            // 左滑让开后露出的四个动作：槽宽与间距统一走 ActionMetrics
+            // 左滑让开后露出的动作：已完成的只露「删除」；未完成的才是全部四个
             Row(
                 modifier = Modifier
                     .matchParentSize()
@@ -258,14 +262,16 @@ fun TopTaskRow(
                 horizontalArrangement = Arrangement.spacedBy(ActionMetrics.Gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RowScopeAction("优先级", QIconKind.Flag, ActionColors.Priority) {
-                    state.reset(); cb.onPriority(node)
-                }
-                RowScopeAction("分类", QIconKind.Folder, ActionColors.Category) {
-                    state.reset(); cb.onCategory(node)
-                }
-                RowScopeAction("子任务", QIconKind.Sub, ActionColors.Subtask) {
-                    state.reset(); cb.onSubtask(node)
+                if (!task.done) {
+                    RowScopeAction("优先级", QIconKind.Flag, ActionColors.Priority) {
+                        state.reset(); cb.onPriority(node)
+                    }
+                    RowScopeAction("分类", QIconKind.Folder, ActionColors.Category) {
+                        state.reset(); cb.onCategory(node)
+                    }
+                    RowScopeAction("子任务", QIconKind.Sub, ActionColors.Subtask) {
+                        state.reset(); cb.onSubtask(node)
+                    }
                 }
                 RowScopeAction("删除", QIconKind.Trash, ActionColors.Delete) {
                     state.reset(); cb.onDelete(node)
@@ -406,8 +412,9 @@ private fun SubtaskRow(
     val actionWidth = ActionMetrics.widthOf(actionCount)
     val density = LocalDensity.current
     val actionPx = with(density) { actionWidth.toPx() }
+    // 已完成也能左滑删除：enabled 始终为真；右滑完成只在未完成时有效
     val state = remember(task.id, done, node.hasChildren) {
-        SwipeState(actionWidthPx = actionPx, blocked = node.hasChildren, enabled = !done)
+        SwipeState(actionWidthPx = actionPx, blocked = node.hasChildren, enabled = true)
     }
     val scope = rememberCoroutineScope()
     val shake = remember { Animatable(0f) }
@@ -446,6 +453,7 @@ private fun SubtaskRow(
                         shakeIt(); cb.onBlocked()
                     },
                     onHaptic = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
+                    allowComplete = !done,
                 ),
         ) {
             ActionBackdrop(state, radius = 19.dp, modifier = Modifier.matchParentSize())

@@ -1,21 +1,15 @@
 package com.quandian.app
 
-import android.app.Activity
-import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
-import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quandian.app.ui.MainScreen
@@ -50,37 +44,7 @@ class MainActivity : ComponentActivity() {
             }
 
             QuandianTheme(dark = dark) {
-                val voiceLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.StartActivityForResult(),
-                ) { result ->
-                    if (result.resultCode == Activity.RESULT_OK) {
-                        val heard = result.data
-                            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                            ?.firstOrNull()
-                        if (!heard.isNullOrBlank()) vm.consumeVoice(heard) else vm.say("没听清，再说一次？")
-                    }
-                }
-
-                val onVoice: () -> Unit = remember(voiceLauncher) {
-                    {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(
-                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                            )
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "说一件要做的事")
-                        }
-                        if (intent.resolveActivity(packageManager) == null) {
-                            vm.say("这台设备没有语音识别服务")
-                        } else {
-                            runCatching { voiceLauncher.launch(intent) }
-                                .onFailure { vm.say("语音输入打不开，换手动记一条？") }
-                        }
-                    }
-                }
-
-                MainScreen(vm = vm, onVoice = onVoice)
+                MainScreen(vm = vm)
             }
         }
     }

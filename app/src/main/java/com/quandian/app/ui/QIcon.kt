@@ -23,7 +23,7 @@ import kotlin.math.sin
  * 与视觉稿里的 SVG 图标保持同一套语汇（圆、圆角、细线）。
  */
 enum class QIconKind {
-    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron,
+    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar,
 }
 
 @Composable
@@ -231,6 +231,29 @@ private fun DrawScope.drawQIcon(kind: QIconKind, c: Color, w: Float, u: Float) {
                     style = Stroke(width = w * 0.95f, cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
+        }
+
+        QIconKind.Calendar -> {
+            // 月视图：圆角外框 + 顶部两个装订环 + 头部分隔线，线框风格与全套图标一致
+            val p = Path().apply {
+                moveTo(4.5f * u, 8f * u)
+                lineTo(4.5f * u, 6.4f * u)
+                quadraticBezierTo(4.5f * u, 5f * u, 6f * u, 5f * u)
+                lineTo(18f * u, 5f * u)
+                quadraticBezierTo(19.5f * u, 5f * u, 19.5f * u, 6.4f * u)
+                lineTo(19.5f * u, 8f * u)
+            }
+            drawPath(p, c, style = stroke)
+            drawRoundRect(
+                color = c,
+                topLeft = Offset(4.5f * u, 8f * u),
+                size = Size(15f * u, 11f * u),
+                cornerRadius = CornerRadius(2.4f * u, 2.4f * u),
+                style = stroke,
+            )
+            line(8f, 3.2f, 8f, 6f)
+            line(16f, 3.2f, 16f, 6f)
+            line(4.5f, 11.2f, 19.5f, 11.2f)
         }
     }
 }

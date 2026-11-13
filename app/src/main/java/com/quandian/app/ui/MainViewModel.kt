@@ -10,6 +10,7 @@ import com.quandian.app.data.CompletionLogEntity
 import com.quandian.app.data.SettingsRepository
 import com.quandian.app.data.TaskNode
 import com.quandian.app.data.TaskRepository
+import com.quandian.app.data.TaskEntity
 import com.quandian.app.data.buildTree
 import com.quandian.app.sync.DavUrl
 import com.quandian.app.sync.SyncEngine
@@ -25,7 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class Page { List, Stats, Settings }
+enum class Page { List, Stats, Settings, Calendar }
 
 sealed interface Sheet {
     data class Priority(val taskId: Long, val isSub: Boolean) : Sheet
@@ -48,6 +49,7 @@ data class UiState(
     val total: Int = 0,
     val completedTotal: Int = 0,
     val logs: List<CompletionLogEntity> = emptyList(),
+    val doneTasks: List<TaskEntity> = emptyList(),
     val skin: FlowSkin = FlowSkin.GREEN,
     val settings: AppSettings = AppSettings(),
     val loading: Boolean = true,
@@ -84,10 +86,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<UiState> = combine(
         repo.tasks,
         repo.categories,
-        repo.logs,
         settingsRepo.settings,
         _filter,
-    ) { tasks, categories, logs, settings, filter ->
+        combine(repo.logs, repo.doneTasks) { logs, doneTasks -> logs to doneTasks },
+    ) { tasks, categories, settings, filter, logsAndDone ->
+        val (logs, doneTasks) = logsAndDone
         val tree = buildTree(tasks)
         val visible = if (filter == "all") tree else tree.filter { it.task.category == filter.removePrefix("cat:") }
         val doneTop = tree.count { it.task.done }
@@ -106,6 +109,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             total = tree.size,
             completedTotal = logs.size,
             logs = logs,
+            doneTasks = doneTasks,
             skin = FlowSkin.from(settings.skin),
             settings = settings,
             loading = false,

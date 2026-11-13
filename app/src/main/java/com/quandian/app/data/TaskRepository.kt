@@ -63,6 +63,8 @@ class TaskRepository(private val db: QuandianDatabase) {
     val tasks = taskDao.observeAll()
     val categories = categoryDao.observeAll()
     val logs = logDao.observeAll()
+    /** 已完成的待办（带完成时间），月视图按完成日期聚合成每日圆点 */
+    val doneTasks = taskDao.observeDone()
 
     /**
      * 正式包首次启动什么都不预置：不建分类、不带示例待办。

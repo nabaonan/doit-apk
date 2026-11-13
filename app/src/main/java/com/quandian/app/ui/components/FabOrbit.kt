@@ -34,10 +34,10 @@ import com.quandian.app.ui.tapFeedback
 import com.quandian.app.ui.theme.QD
 import kotlinx.coroutines.launch
 
-/** 加号上半弧的四颗小圆：添加分类 / 语音输入 / 热力图 / 设置（只画图标，说明文字走无障碍语义） */
+/** 加号上半弧的四颗小圆：添加分类 / 月视图 / 热力图 / 设置（只画图标，说明文字走无障碍语义） */
 enum class Satellite(val label: String, val icon: QIconKind, val x: Dp, val y: Dp) {
     Category("添加分类", QIconKind.FolderPlus, (-104).dp, (-56).dp),
-    Voice("语音输入", QIconKind.Mic, (-44).dp, (-112).dp),
+    Calendar("月视图", QIconKind.Calendar, (-44).dp, (-112).dp),
     Stats("热力图", QIconKind.Heat, 44.dp, (-112).dp),
     Settings("设置", QIconKind.Gear, 104.dp, (-56).dp),
 }
