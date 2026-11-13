@@ -296,6 +296,12 @@ CI 打正式包时通过仓库 Secrets 提供：`KEYSTORE_BASE64` / `KEYSTORE_PA
 CI 不经过 wrapper：`gradle/actions/setup-gradle` 直接装官方 Gradle 8.11.1 并调用 `gradle`，
 因为 `gradle-wrapper.properties` 的 `distributionUrl` 指向腾讯镜像，境外 runner 拉 130MB 常常慢到超时。
 
+依赖仓库也按环境隔离（`settings.gradle.kts`）：本机走阿里云镜像提速，CI（`CI=true`）只用
+`google()` / `mavenCentral()` / `gradlePluginPortal()`。原因是 GitHub runner 从境外访问
+`maven.aliyun.com` 时，镜像对不存在的 artifact（比如 KSP 的 pom-only plugin marker 的 `.jar`）
+会返回 **502 Bad Gateway** 而不是 404，Gradle 会把它当成仓库故障并禁用该仓库，配置阶段直接报
+`Could not resolve all artifacts`，构建还没开始就红了。
+
 Gradle 产物统一命名成 `doit-<versionName>-<buildType>.apk`（`app/build.gradle.kts` 的 `androidComponents.onVariants`），
 本地 `assembleDebug` 与 CI 下到的文件名一致，不用再猜 `app-debug.apk` 是哪个版本。
 
