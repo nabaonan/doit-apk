@@ -34,6 +34,9 @@ jobs:
       - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: 安装 SDK 平台与构建工具
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
       - name: 配置 Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
 
@@ -88,6 +91,9 @@ jobs:
 
       - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: 安装 SDK 平台与构建工具
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       - name: 配置 Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
