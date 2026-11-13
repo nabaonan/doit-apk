@@ -153,7 +153,7 @@ private fun ExpandChevron(expanded: Boolean) {
 
 /**
  * 卡片右端的一列：优先级标签在前、展开按钮贴在卡片最右缘，
- * 子任务完成数排在展开按钮**正下方** —— 只占右侧这一条窄列，不跟标题抢宽度。
+ * 完成百分比排在展开按钮**正下方** —— 只占右侧这一条窄列，不跟标题抢宽度。
  */
 @Composable
 private fun CardTrailing(
@@ -172,9 +172,9 @@ private fun CardTrailing(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             ExpandChevron(expanded)
             Spacer(Modifier.height(2.dp))
-            // 数量跟着展开按钮走：在它下方居中，展开/收起时数字不动
+            // 百分比跟着展开按钮走：在它下方居中，展开/收起时数字不动
             Text(
-                text = "$doneChildren/$totalChildren",
+                text = percentText(doneChildren, totalChildren),
                 fontSize = 9.5.sp,
                 color = QD.InkFaint,
                 letterSpacing = 0.2.sp,

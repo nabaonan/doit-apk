@@ -56,6 +56,7 @@ import com.quandian.app.ui.theme.checkFill
 import com.quandian.app.ui.theme.labelOn
 import com.quandian.app.ui.theme.numeric
 import com.quandian.app.ui.theme.readableOn
+import kotlin.math.roundToInt
 
 /**
  * 圆形勾选框：
@@ -135,7 +136,7 @@ fun TaskCheck(
     }
 }
 
-/** 完成划线：一条细线，多行标题也每行都有 */
+/** 完成划线：一条细线，多行标题也每行都有；颜色与删除态文字同款（跟着整卡 0.5 透明度一起变灰） */
 @Composable
 fun StrikeText(
     text: String,
@@ -163,7 +164,9 @@ fun StrikeText(
                     val startX = lr.getLineLeft(i)
                     val endX = lr.getLineRight(i)
                     drawLine(
-                        color = QD.Strike.copy(alpha = 0.8f),
+                        // 直接用文字同款 Ink：本组件位于删除态整卡的 0.5 透明度内，
+                        // 划线会和文字一起被淡化到同一个浅灰，不再单独用黄/橘色
+                        color = QD.Ink,
                         start = Offset(startX, y),
                         end = Offset(endX, y),
                         strokeWidth = 1.3.dp.toPx(),
@@ -213,6 +216,13 @@ fun PriorityTag(
     }
 }
 
+/** done/total 的完成百分比文案：`67%`；total<=0 一律返回 `0%` */
+fun percentText(done: Int, total: Int): String {
+    if (total <= 0) return "0%"
+    val pct = (done.toFloat() * 100f / total).roundToInt()
+    return "${pct}%"
+}
+
 /** 顶部完成进度环 */
 @Composable
 fun ProgressRing(done: Int, total: Int, modifier: Modifier = Modifier, size: Dp = 56.dp) {
@@ -238,7 +248,8 @@ fun ProgressRing(done: Int, total: Int, modifier: Modifier = Modifier, size: Dp 
                 )
             }
         }
-        Text("$done/$total", style = numeric(13))
+        // 环内显示完成百分比（不是 2/3 这种数量）：与卡片上子任务百分比共用 percentText，观感统一
+        Text(percentText(done, total), style = numeric(13))
     }
 }
 
