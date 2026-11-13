@@ -200,7 +200,22 @@
 - **一键发版 `./release.sh`**：读取最近一个 tag 自动 +0.0.1 打新 tag 并推送，触发 CI 构建发布。
   - `./release.sh` / `patch`：`v1.0.0 → v1.0.1`；`minor`：`v1.0.1 → v1.1.0`；`major`：`v1.1.0 → v2.0.0`；也可 `./release.sh 1.2.3` 直接指定。
   - `--dry-run` 只预览不操作；工作区有未提交改动会中止（`--force` 可跳过）；会校验本地/远端是否已存在同名 tag。
-- **WebDAV 测试连接 405**：飞牛 fnOS 这类服务器，对集合根路径少末尾斜杠、或其自动建目录受限时，会对 `PROPFIND` 返回 405。`WebDavClient.test()` 现在先按原地址探测，遇 405 自动补 `/` 重试（成功提示「已自动补末尾 /」），仍失败时给出针对 405 的具体建议（补 `/`、先在 NAS 文件管理建好同步文件夹再填子路径、用 WebDAV 专用账号）。
+- **WebDAV 测试连接 405**：见下一节（第十九轮已彻底重写探测方式，第十八轮的「补斜杠重试」方案已被替换）。
+
+## 第十九轮：WebDAV 405 根治（v1.0.2）
+
+**根因**：`dav.<xxx>.fnos.net` 是飞牛 fn Connect 的 WebDAV 专用域名，**域名根 `/` 本身就是 WebDAV 根**；很多人照着「WebDAV」四个字又补了一层 `/webdav`，这个目录在 NAS 里并不存在，PROPFIND 到不存在的集合就回 405。另外 Android 的 `HttpURLConnection` 对 `PROPFIND` 这类非标准方法支持不稳，中继/反代也常直接拒绝，而同步本身**只需要 PUT**。
+
+- **探测改为真实上传**：`WebDavClient.test()` 不再发 PROPFIND，而是 PUT 一个 `doit-connection-test.json` 探针，测的就是实际同步能力；成功后 DELETE 清理。
+- **自动找可用目录**：依次尝试「原地址（补 `/`）→ 去掉 `webdav`/`dav` 这类误填段后的父目录 → `<域名>/doit/ → 域名根」，哪个能写就用哪个，并把可用地址回填进设置（`DavResult.workingUrl` → `settingsRepo.setDavConfig`），避免「测试通过、保存却还是错的旧地址」。
+- **`upload()` 同样走候选重试**，直接点「保存并同步」也会自动纠错。
+- **错误提示按场景翻译**：401 账号密码、403 无写入权限、404 目录不存在、405 给出飞牛专用地址写法；网络层异常再按明文被禁 / 证书不受信 / 域名解析失败 / 连接超时分别提示。
+- **允许明文 HTTP**：`AndroidManifest.xml` 加 `usesCleartextTraffic="true"`，局域网 `http://NAS_IP:5005` 的 WebDAV 不再被系统静默拦掉（这是之前一个隐藏 bug）。
+- **设置页地址提示**：placeholder 改为 `https://dav.example.com/doit/`，输入框下常驻一行说明「填 NAS 里已建好的文件夹，结尾带 /，飞牛 fn Connect 不要再写 /webdav」。
+
+**飞牛用户正确配置**：① 在 NAS 文件管理里手动建一个文件夹（如 `doit`）；② 地址填 `https://dav.<你的ID>.fnos.net:443/doit/`（结尾带 `/`，**不要** `/webdav`）；③ 账号密码用有该文件夹读写权限的 NAS 账号；④ 点「测试连接」，新版会自动确认可用路径并回填。
+
+**验证**：本机起了一个模拟飞牛行为的 WebDAV 服务（`/webdav/*` 回 405、根路径可写），在模拟器上实测「测试连接」→ 第 1 次 PUT 405、第 2 次 PUT 根路径 201、DELETE 清理，地址栏自动变为根路径；「保存并同步」成功上传 1663 字节的真实快照 JSON。截图见 `screenshots/r18_webdav_autofix.png`、`r18_webdav_synced.png`。
 
 ## 技术栈
 
@@ -209,7 +224,7 @@
 - DataStore Preferences 保存设置（皮肤、WebDAV 配置、上次同步）
 - 手势：`pointerInput` + `awaitEachGesture` 自绘双向滑动，未使用第三方库
 - 语音输入：系统 `RecognizerIntent`（无需自建识别服务）
-- WebDAV：`HttpURLConnection` 实现 PROPFIND 探活与 PUT 备份，无额外网络库
+- WebDAV：`HttpURLConnection` 实现 PUT 探针探活 + PUT 备份 + DELETE 清理，无额外网络库（不用 PROPFIND）
 
 ## 目录结构
 
@@ -250,7 +265,7 @@ Quandian/
 安装到手机：
 
 ```bash
-adb install -r app/build/outputs/apk/debug/doit-1.0.0-debug.apk
+adb install -r app/build/outputs/apk/debug/doit-1.0.2-debug.apk
 ```
 
 - 调试包包名 `com.quandian.app.debug`，可与正式包共存，桌面显示「doit · 调试」
@@ -260,8 +275,8 @@ adb install -r app/build/outputs/apk/debug/doit-1.0.0-debug.apk
 
 ```
 dist/
-├── doit-1.0.0-debug.apk     # 调试包，包名 com.quandian.app.debug，桌面显示「doit · 调试」，可与正式包共存（含示例分类/待办 + 一年演示记录）
-├── doit-1.0.0-release.apk   # 正式包，包名 com.quandian.app（keystore/quandian-release.jks 签名），零内置数据
+├── doit-1.0.2-debug.apk     # 调试包，包名 com.quandian.app.debug，桌面显示「doit · 调试」，可与正式包共存（含示例分类/待办 + 一年演示记录）
+├── doit-1.0.2-release.apk   # 正式包，包名 com.quandian.app（keystore/quandian-release.jks 签名），零内置数据
 └── SHA256SUMS.txt               # 校验和
 
 screenshots/                     # 验收截图：01–15 模拟器（1080×2400 / Android 15），real_* 真机
@@ -275,6 +290,8 @@ screenshots/                     # 验收截图：01–15 模拟器（1080×2400
                                  # r13_* 卡片排版统一（标签居中 / 子任务同尺寸 / 展开按钮 / 单条删除线 / 精简新建面板）
                                  # r14_* 同步开关门控 / 地址校验标红 / 去子任务竖线 / 数量右下角 + 箭头最右
                                  # r15_* 去默认分类（只剩「全部」）/ 优先级蓝橘红 / 数量挪到箭头下方 / 动作按钮等距
+                                 # r16_* 删除确认弹窗等宽大按钮，r17_* 删除线浅灰 + 完成百分比
+                                 # r18_* WebDAV 405 自动纠错：地址回填 / 同步成功
 ```
 
 真机验收环境：华为 NAM-AL00（1080×2340 / density 480，Android 12 底座的 HarmonyOS）。逐项验过：主界面渲染、右滑完成、左滑四动作、优先级/分类/子任务面板、新建任务置顶、分类管理、删除确认、统计页周/月/年三种视图；第二轮 8 项优化装包复核过中文日期、无衬线字形、右侧优先级 tag、热力图点击气泡；第三轮 5 项修复在真机上逐条复核过进度环层级、左滑四角干净度、三种图表气泡尾尖、滚动时头部固定、周/年视图布局。

@@ -181,7 +181,7 @@ fun SettingsPage(
                         SettingField(
                             value = url,
                             onChange = { if (it.length <= 300) url = it },
-                            placeholder = "服务器地址 · https://dav.example.com",
+                            placeholder = "服务器地址 · https://dav.example.com/doit/",
                             invalid = urlInvalid,
                             onFocusChange = { focused ->
                                 // 离开输入框才判红，边打字边飘红会像在骂人
@@ -199,6 +199,13 @@ fun SettingsPage(
                                 modifier = Modifier.padding(start = 13.dp, top = 5.dp),
                             )
                         }
+                        Text(
+                            "填 NAS 里已建好的文件夹，结尾带 /。飞牛 fn Connect 的域名根就是 WebDAV 根，不要再写 /webdav。",
+                            fontSize = 10.sp,
+                            color = QD.InkFaint,
+                            lineHeight = 15.sp,
+                            modifier = Modifier.padding(start = 13.dp, top = 6.dp, end = 4.dp),
+                        )
                         Spacer(Modifier.height(8.dp))
                         SettingField(
                             value = user,

@@ -262,8 +262,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         DavUrl.validate(url)?.let { say(it); return }
         viewModelScope.launch {
             say("正在测试连接…")
-            val result = WebDavClient.test(url, user, pass)
-            result.onSuccess { say(it) }.onFailure { say(it.message ?: "连接失败") }
+            WebDavClient.test(url, user, pass).fold(
+                onSuccess = { r ->
+                    // 客户端自动找到可用目录时把它写回配置，设置页的输入框会跟着刷新，
+                    // 这样「保存并同步」用的就是已验证过的地址。
+                    r.workingUrl?.let { settingsRepo.setDavConfig(it, user, pass) }
+                    say(
+                        if (r.workingUrl != null) "${r.message}，地址已自动修正为 ${r.workingUrl}"
+                        else r.message,
+                    )
+                },
+                onFailure = { say(it.message ?: "连接失败") },
+            )
         }
     }
 
@@ -273,12 +283,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             settingsRepo.setDavConfig(url, user, pass)
             say("正在同步…")
             val snapshot = repo.exportSnapshot()
-            val result = WebDavClient.upload(url, user, pass, "quandian-backup.json", snapshot)
-            result.onSuccess { detail ->
-                val stamp = "上次同步 · 刚刚 · ${snapshot.length} 字节 · $detail"
-                settingsRepo.setLastSync(stamp)
-                say("配置已保存，同步完成")
-            }.onFailure { say(it.message ?: "同步失败") }
+            WebDavClient.upload(url, user, pass, "quandian-backup.json", snapshot).fold(
+                onSuccess = { r ->
+                    r.workingUrl?.let { settingsRepo.setDavConfig(it, user, pass) }
+                    settingsRepo.setLastSync("上次同步 · 刚刚 · ${snapshot.length} 字节 · ${r.message}")
+                    say(if (r.workingUrl != null) "同步完成，地址已自动修正" else "配置已保存，同步完成")
+                },
+                onFailure = { say(it.message ?: "同步失败") },
+            )
         }
     }
 
