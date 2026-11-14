@@ -151,7 +151,8 @@ fun MainScreen(vm: MainViewModel) {
                 },
                 onTap = {
                     menuOpen = false
-                    vm.openSheet(Sheet.NewTask)
+                    // 带着当前所在分类开表单：分类默认预选它（在「全部」时默认不分类）
+                    vm.openSheet(Sheet.NewTask(state.filter))
                 },
                 onSatellite = { sat ->
                     menuOpen = false

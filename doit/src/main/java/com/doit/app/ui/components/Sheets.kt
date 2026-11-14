@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.doit.app.data.NO_CATEGORY
 import com.doit.app.data.TaskNode
 import com.doit.app.ui.DoitIcon
 import com.doit.app.ui.DoitIconKind
@@ -220,7 +221,7 @@ fun SheetHost(
         is Sheet.Priority -> "轻重缓急"
         is Sheet.MoveCategory -> "移动分类"
         is Sheet.Subtask -> "拆成几步"
-        Sheet.NewTask -> "添加待办"
+        is Sheet.NewTask -> "添加待办"
         Sheet.Categories -> "管理分类"
         is Sheet.ConfirmDelete -> "确认删除"
         is Sheet.ConfirmCategory -> "删除分类"
@@ -258,6 +259,7 @@ fun SheetHost(
             when (sheet) {
                 is Sheet.NewTask -> NewTaskBody(
                     categories = categories,
+                    defaultCategory = sheet.category,
                     voiceDraft = voiceDraft,
                     onVoiceConsumed = onVoiceConsumed,
                     onSubmit = { text, cat ->
@@ -352,13 +354,18 @@ private fun SheetNote(text: String) {
 @Composable
 private fun NewTaskBody(
     categories: List<com.doit.app.ui.CategoryUi>,
+    defaultCategory: String,
     voiceDraft: String?,
     onVoiceConsumed: () -> Unit,
     onSubmit: (String, String) -> Unit,
 ) {
     var text by remember { mutableStateOf(voiceDraft ?: "") }
-    // 没建任何分类时留空串：这条待办就是"未分类"，卡片上只显示时间
-    var cat by remember(categories) { mutableStateOf(categories.firstOrNull()?.name ?: "") }
+    // 默认选中「当前所在分类」：顶部切到某分类后点 +，这里就预选它；顶部在「全部」时默认「不分类」。
+    // 每次打开都会按当时的页面分类重新预选（remember 的 key 带上 defaultCategory），
+    // 手动仍可随时用下面的胶囊切到任意分类（含「不分类」），加完再开仍回到正确默认值。
+    var cat by remember(defaultCategory, categories) {
+        mutableStateOf(initialNewTaskCategory(defaultCategory, categories))
+    }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         if (voiceDraft != null) onVoiceConsumed()
@@ -382,7 +389,10 @@ private fun NewTaskBody(
     if (categories.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         PillTabs(
-            tabs = categories.map { c -> PillTab(key = c.name, label = c.name, accent = c.color) },
+            tabs = buildList {
+                add(PillTab(key = NO_CATEGORY, label = "不分类", accent = Doit.InkFaint))
+                categories.forEach { c -> add(PillTab(key = c.name, label = c.name, accent = c.color)) }
+            },
             selectedKey = cat,
             onSelect = { cat = it },
             mode = PillTabsMode.Chip,
@@ -393,6 +403,12 @@ private fun NewTaskBody(
     } else {
         SheetNote("还没有分类。想归类的话，先到「管理分类」里建一个。")
     }
+}
+
+/** 从页面筛选串解析新增表单的默认分类：「cat:X」→ X（且分类仍存在才用），否则视为不分类 */
+private fun initialNewTaskCategory(filter: String, categories: List<com.doit.app.ui.CategoryUi>): String {
+    val name = filter.removePrefix("cat:")
+    return if (name != filter && categories.any { it.name == name }) name else NO_CATEGORY
 }
 
 @Composable

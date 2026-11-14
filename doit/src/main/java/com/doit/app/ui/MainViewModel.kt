@@ -36,7 +36,8 @@ sealed interface Sheet {
     data class Priority(val taskId: Long, val isSub: Boolean) : Sheet
     data class MoveCategory(val taskId: Long) : Sheet
     data class Subtask(val taskId: Long) : Sheet
-    data object NewTask : Sheet
+    /** [category] 为用户打开表单时的页面筛选分类（"cat:X" / "all"），新增表单据此预选默认分类 */
+    data class NewTask(val category: String) : Sheet
     data object Categories : Sheet
     data class ConfirmDelete(val taskId: Long) : Sheet
     data class ConfirmCategory(val name: String) : Sheet
@@ -327,7 +328,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun consumeVoice(text: String) {
         voiceDraft = text
-        _sheet.value = Sheet.NewTask
+        _sheet.value = Sheet.NewTask("")
     }
 
     fun clearVoiceDraft() {
