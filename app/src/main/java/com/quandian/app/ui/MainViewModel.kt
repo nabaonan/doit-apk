@@ -53,6 +53,8 @@ data class UiState(
     val completedTotal: Int = 0,
     /** 今日待办里可见的顶级任务总数（未整体完成 + 今日完成的），「全部」徽标按它统计 */
     val todayTotal: Int = 0,
+    /** 今日待办里已完成（整体完成且完成于今天）的顶级任务数，右上角进度环分子 */
+    val todayDone: Int = 0,
     val logs: List<CompletionLogEntity> = emptyList(),
     val doneTasks: List<TaskEntity> = emptyList(),
     val skin: FlowSkin = FlowSkin.GREEN,
@@ -117,6 +119,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             done = doneTop,
             total = visible.size,
             todayTotal = todayNodes.size,
+            todayDone = todayNodes.count { it.task.done },
             completedTotal = logs.size,
             logs = logs,
             doneTasks = doneTasks,

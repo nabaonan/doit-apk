@@ -269,7 +269,9 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit) {
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("今日", style = displayStyle, modifier = Modifier.weight(1f))
-            ProgressRing(done = state.done, total = state.total)
+            // 右上角进度恒按「今日全部任务」统计：已完成 + 未完成都计入分母，分子是今日完成的，
+            // 与当前切到的分类标签解耦；非今日完成的历史/未来项已被 showInToday 排除。
+            ProgressRing(done = state.todayDone, total = state.todayTotal)
         }
         Text(
             // 空清单（正式包首次启动就是这样）先教用户下一步，别对着"今天都放下了"发呆
