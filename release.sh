@@ -13,7 +13,7 @@
 # 注意事项：
 #   - 必须在仓库根目录运行，且远端必须能 push（SSH 或 HTTPS 凭据）。
 #   - 默认要求工作区干净（有未提交改动会中止），想无视就用 --force。
-#   - tag 的 versionName / versionCode 由 app/build.gradle.kts 从 tag 推导。
+#   - tag 的 versionName / versionCode 由 doit/build.gradle.kts 从 tag 推导。
 
 set -euo pipefail
 

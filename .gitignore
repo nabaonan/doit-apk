@@ -1,7 +1,7 @@
 # Gradle
 .gradle/
 build/
-app/build/
+doit/build/
 local.properties
 .kotlin/
 
@@ -13,13 +13,13 @@ local.properties
 # 本地模拟器（AVD 动辄几百 MB）
 .emu/
 
-# 签名材料不入库；例外：keystore/quandian-release.jks 入库作为统一正式签名，
+# 签名材料不入库；例外：keystore/doit-release.jks 入库作为统一正式签名，
 # 保证本地与 CI 每个 release 用同一证书（否则回退 debug 证书会导致“签名不一致”无法覆盖升级）
 keystore/*
-!keystore/quandian-release.jks
+!keystore/doit-release.jks
 *.jks
 *.keystore
-!keystore/quandian-release.jks
+!keystore/doit-release.jks
 keystore.properties
 
 # 构建产物

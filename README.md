@@ -17,7 +17,7 @@
 
 - 源码仓库：<https://github.com/nabaonan/doit-apk>（只有打 `v*` tag 才触发 CI 构建）
 - 交互原型：`design/prototype/index.html`
-- 设计稿：`design/圈点-APP设计稿.png`
+- 设计稿：`design/doit-APP设计稿.png`
 
 ---
 
@@ -64,20 +64,20 @@
 # 构建调试包（模拟器 / 真机调试用）
 ./gradlew assembleDebug
 
-# 构建正式包（自动用仓库内 keystore/quandian-release.jks 签名）
+# 构建正式包（自动用仓库内 keystore/doit-release.jks 签名）
 ./gradlew assembleRelease
 
 # 装到已连接的设备
-adb install -r app/build/outputs/apk/debug/doit-<版本>-debug.apk
+adb install -r doit/build/outputs/apk/debug/doit-<版本>-debug.apk
 ```
 
 产物统一命名 `doit-<versionName>-<buildType>.apk`，例如 `doit-1.0.6-debug.apk`。
 
 要点：
 
-- **调试包**包名 `com.quandian.app.debug`，桌面显示「doit · 调试」，可与正式包共存；自带六条示例待办 + 一年演示完成记录，方便核对卡片形态与统计页。
-- **正式包**包名 `com.quandian.app`，零预置数据（连默认分类都不建），首次打开是空白清单。
-- **版本号不用手改**：`app/build.gradle.kts` 从最近的 git tag 推导（`v1.2.3` → `versionName=1.2.3`、`versionCode=10203 = major*10000 + minor*100 + patch`）；无 tag 时回退 `1.0.0 / 10000`，保证任何机器都能出包。
+- **调试包**包名 `com.doit.app.debug`，桌面显示「doit · 调试」，可与正式包共存；自带六条示例待办 + 一年演示完成记录，方便核对卡片形态与统计页。
+- **正式包**包名 `com.doit.app`，零预置数据（连默认分类都不建），首次打开是空白清单。
+- **版本号不用手改**：`doit/build.gradle.kts` 从最近的 git tag 推导（`v1.2.3` → `versionName=1.2.3`、`versionCode=10203 = major*10000 + minor*100 + patch`）；无 tag 时回退 `1.0.0 / 10000`，保证任何机器都能出包。
 
 > 国内构建提速：仓库里的 `settings.gradle.kts` 在本机走阿里云镜像（CI 环境 `CI=true` 时只用官方仓库，避免境外访问阿里云镜像返回 502）。若本地网络访问镜像不稳定，可去掉镜像配置。
 
@@ -111,13 +111,13 @@ adb install -r app/build/outputs/apk/debug/doit-<版本>-debug.apk
 
 ### 签名
 
-- 所有 release 统一用仓库内 `keystore/quandian-release.jks`（alias 与密码均为 `quandian`）签名，`build.gradle.kts` 将其设为**首选**；本地与 CI 每个版本同一把证书，保证新版本可覆盖旧版本安装。
-- 生成一把新证书：
+- 所有 release 统一用仓库内 `keystore/doit-release.jks`（alias 与密钥口令均为 `doit`）签名，`doit/build.gradle.kts` 将其设为**首选**；本地与 CI 每个版本同一把证书，保证新版本可覆盖旧版本安装。
+- 生成一把新证书（密钥口令至少 6 位）：
 
 ```bash
-keytool -genkeypair -v -keystore keystore/quandian-release.jks \
-  -alias quandian -keyalg RSA -keysize 2048 -validity 36500 \
-  -storepass quandian -keypass quandian -dname "CN=Quandian, O=Quandian, C=CN"
+keytool -genkeypair -v -keystore keystore/doit-release.jks \
+  -alias doit -keyalg RSA -keysize 2048 -validity 36500 \
+  -storepass ***REMOVED*** -keypass ***REMOVED*** -dname "CN=Doit, O=Doit, C=CN"
 ```
 
 > 注意：签名证书已入库以换取“升级不报签名不一致”。若仓库将来转公开，务必把它从仓库移除，改用 GitHub Secrets（`KEYSTORE_BASE64` 等）存放同一把密钥。
@@ -138,8 +138,8 @@ keytool -genkeypair -v -keystore keystore/quandian-release.jks \
 ## 目录结构
 
 ```
-Quandian/
-├── app/src/main/java/com/quandian/app/
+Doit/
+├── doit/src/main/java/com/doit/app/
 │   ├── MainActivity.kt           # 边到边 + 主题配置
 │   ├── data/                     # Room 实体 / DAO / 仓库 / 种子数据
 │   ├── sync/                     # WebDAV 同步
@@ -156,12 +156,12 @@ Quandian/
 │       ├── StatsPage.kt          # 热力图 / 环形图 / 折线图
 │       ├── CalendarPage.kt       # 月视图（按完成日期聚合）
 │       ├── SettingsPage.kt       # 外观 / 同步 / 关于
-│       ├── QIcon.kt              # 24×24 网格手绘线性图标
+│       ├── DoitIcon.kt              # 24×24 网格手绘线性图标
 │       ├── gesture/SwipeState.kt # 双向滑动与上膛判定
 │       ├── components/           # 卡片 / 勾选 / 面板 / FAB 卫星
 │       └── theme/                # 设计令牌（配色、字体、皮肤）
 ├── .github/workflows/android.yml # CI：只在 tag 触发
-├── keystore/quandian-release.jks # 统一签名证书（入库）
+├── keystore/doit-release.jks # 统一签名证书（入库）
 └── design/                       # 视觉稿与效果图
 ```
 
@@ -188,7 +188,7 @@ Quandian/
 
 ### 主题与设计令牌
 
-- 所有颜色走 `QD` 令牌（`QDPalette`），两套：浅色 `Mint`（浅薄荷绿底 + 纯白卡片 + `#34C7A8`）、深色 `Midnight`（深夜青灰 `#111D1B` + 薄荷绿 `#79C9A0`）；设置页「主题」三档（跟随系统 / 浅色 / 深色）。
+- 所有颜色走 `Doit` 令牌（`DoitPalette`），两套：浅色 `Mint`（浅薄荷绿底 + 纯白卡片 + `#34C7A8`）、深色 `Midnight`（深夜青灰 `#111D1B` + 薄荷绿 `#79C9A0`）；设置页「主题」三档（跟随系统 / 浅色 / 深色）。
 - 三套进度皮肤（绿色生长 / 火花四溅 / 蓝色流水）各自有浅深两版填充。
 - 三类语义色例外不随主题变：`FlowSkin` 皮肤、`Priority` 五档优先级色、分类颜色（存在用户数据里）。
 

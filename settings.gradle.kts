@@ -40,4 +40,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "doit"
-include(":app")
+include(":doit")

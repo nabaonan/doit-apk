@@ -71,13 +71,13 @@ jobs:
         run: gradle --no-daemon assembleDebug 2>&1 | tee -a ci-build.log
 
       - name: 列出产物
-        run: ls -lh app/build/outputs/apk/debug/
+        run: ls -lh doit/build/outputs/apk/debug/
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: doit-debug-apk
-          path: app/build/outputs/apk/debug/doit-*.apk
+          path: doit/build/outputs/apk/debug/doit-*.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -87,8 +87,8 @@ jobs:
         with:
           name: test-reports
           path: |
-            app/build/reports/tests/**
-            app/build/reports/lint-results-*.html
+            doit/build/reports/tests/**
+            doit/build/reports/lint-results-*.html
           if-no-files-found: ignore
           retention-days: 7
 
@@ -163,24 +163,24 @@ jobs:
           # CI 不调用 ./gradlew，没必要再校验 wrapper jar（校验不过会直接失败）
           validate-wrappers: false
 
-      # 统一用仓库内 keystore/quandian-release.jks 签名（build.gradle.kts 首选它），
+      # 统一用仓库内 keystore/doit-release.jks 签名（build.gradle.kts 首选它），
       # 保证本地与每个 release 都是同一把证书，能覆盖旧版本安装。
       # 之前把 keystore 排除在仓库外、CI 回退到每次运行都不同的 debug 证书，
       # 导致「签名不一致」无法升级——现在不再需要（也忽略）KEYSTORE_BASE64 等 secret。
       - name: 确认签名证书
         run: |
-          if [ ! -f keystore/quandian-release.jks ]; then
-            echo "::error::缺少 keystore/quandian-release.jks，release 无法统一签名"
+          if [ ! -f keystore/doit-release.jks ]; then
+            echo "::error::缺少 keystore/doit-release.jks，release 无法统一签名"
             exit 1
           fi
-          echo "::notice::将用 keystore/quandian-release.jks 统一签名（可覆盖旧版本安装）"
+          echo "::notice::将用 keystore/doit-release.jks 统一签名（可覆盖旧版本安装）"
 
       - name: 构建 Release APK
         run: gradle --no-daemon assembleRelease 2>&1 | tee -a ci-build.log
 
       - name: 规整产物名（doit-<tag>-release.apk）
         run: |
-          src=$(ls app/build/outputs/apk/release/doit-*.apk | head -1)
+          src=$(ls doit/build/outputs/apk/release/doit-*.apk | head -1)
           cp "$src" "doit-${GITHUB_REF_NAME}-release.apk"
           ls -lh doit-*.apk
 
