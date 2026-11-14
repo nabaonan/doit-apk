@@ -300,6 +300,10 @@ fun SettingsPage(
     }
 }
 
+/**
+ * 设置页分区容器：与主页任务卡同一套卡片语言（19dp 圆角 · Doit.Card 底 · 1dp CardBorder 描边 · 无阴影）。
+ * 标题 + 说明收进卡内作首行，内容贴卡内边距；分区靠卡片本身 + 卡间间距区分，不再用分隔线。
+ */
 @Composable
 private fun SettingSection(
     title: String,
@@ -307,17 +311,23 @@ private fun SettingSection(
     last: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val shape = RoundedCornerShape(19.dp)
     Column(
         Modifier
             .fillMaxWidth()
             .padding(bottom = if (last) 0.dp else 20.dp),
     ) {
-        Text(title, style = titleStyle.copy(fontSize = 14.5.sp))
-        Text(caption, fontSize = 11.sp, color = Doit.InkFaint, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
-        content()
-        if (!last) {
-            Spacer(Modifier.height(18.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Doit.LineSoft))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(Doit.Card)
+                .border(1.dp, Doit.CardBorder, shape)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Text(title, style = titleStyle.copy(fontSize = 14.5.sp))
+            Text(caption, fontSize = 11.sp, color = Doit.InkFaint, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
+            content()
         }
     }
 }

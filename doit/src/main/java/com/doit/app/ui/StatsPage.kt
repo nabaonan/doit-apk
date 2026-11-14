@@ -126,13 +126,13 @@ fun StatsPage(state: UiState, onBack: () -> Unit, modifier: Modifier = Modifier)
                 .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(scroll)
-                .padding(top = 16.dp, bottom = 28.dp)
+                .padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 28.dp)
                 .graphicsLayer {
                     alpha = contentFade.value
                     translationY = (1f - contentFade.value) * 14f
                 },
         ) {
-            // ---------- 热力图（年视图内容整屏铺满，不留左右边距） ----------
+            // ---------- 热力图 ----------
             StatSection(
                 title = "热力图",
                 caption = when (range) {
@@ -140,7 +140,6 @@ fun StatsPage(state: UiState, onBack: () -> Unit, modifier: Modifier = Modifier)
                     StatRange.MONTH -> "近 30 天 · 一格一天，颜色越深完成越多"
                     StatRange.YEAR -> "近一年 · 一格一天，颜色越深完成越多"
                 },
-                contentFullBleed = range == StatRange.YEAR,
             ) {
                 when (range) {
                     StatRange.WEEK -> {
@@ -155,7 +154,7 @@ fun StatsPage(state: UiState, onBack: () -> Unit, modifier: Modifier = Modifier)
 
                     StatRange.YEAR -> {
                         HeatYear(counts, today)
-                        HeatLegend(Modifier.padding(horizontal = 22.dp))
+                        HeatLegend()
                     }
                 }
             }
@@ -223,20 +222,31 @@ fun PageHead(title: String, latin: String, onBack: () -> Unit) {
     }
 }
 
+/**
+ * 统计页分区容器：与主页任务卡同一套卡片语言（19dp 圆角 · Doit.Card 底 · 1dp CardBorder 描边 · 无阴影）。
+ * 标题 + 说明收进卡内作首行，内容随之贴卡内边距，分区之间靠卡片本身 + 卡间间距区分，不再用分隔线。
+ */
 @Composable
 private fun StatSection(
     title: String,
     caption: String,
     last: Boolean = false,
-    contentFullBleed: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val shape = RoundedCornerShape(19.dp)
     Column(
         Modifier
             .fillMaxWidth()
             .padding(bottom = if (last) 0.dp else 18.dp),
     ) {
-        Column(Modifier.padding(horizontal = 22.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(Doit.Card)
+                .border(1.dp, Doit.CardBorder, shape)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
             Text(title, style = titleStyle.copy(fontSize = 14.sp))
             Text(
                 caption,
@@ -244,13 +254,7 @@ private fun StatSection(
                 color = Doit.InkFaint,
                 modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
             )
-        }
-        Column(if (contentFullBleed) Modifier.fillMaxWidth() else Modifier.padding(horizontal = 22.dp)) {
             content()
-        }
-        if (!last) {
-            Spacer(Modifier.height(18.dp))
-            Box(Modifier.fillMaxWidth().padding(horizontal = 22.dp).height(1.dp).background(Doit.LineSoft))
         }
     }
 }
