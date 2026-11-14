@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 enum class Page { List, Stats, Settings, Calendar }
 
@@ -48,6 +51,8 @@ data class UiState(
     val done: Int = 0,
     val total: Int = 0,
     val completedTotal: Int = 0,
+    /** 今日待办里可见的顶级任务总数（未整体完成 + 今日完成的），「全部」徽标按它统计 */
+    val todayTotal: Int = 0,
     val logs: List<CompletionLogEntity> = emptyList(),
     val doneTasks: List<TaskEntity> = emptyList(),
     val skin: FlowSkin = FlowSkin.GREEN,
@@ -92,8 +97,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ) { tasks, categories, settings, filter, logsAndDone ->
         val (logs, doneTasks) = logsAndDone
         val tree = buildTree(tasks)
-        val visible = if (filter == "all") tree else tree.filter { it.task.category == filter.removePrefix("cat:") }
-        val doneTop = tree.count { it.task.done }
+        // 今日待办：只按最顶级的完成状态过滤——未整体完成照常展示（子任务全部保留），
+        // 整体完成且完成日期不是今天的顶级任务才从首页移除（历史完成记录进月视图）。
+        val today = LocalDate.now()
+        val todayNodes = tree.filter { showInToday(it, today) }
+        val visible = if (filter == "all") todayNodes else todayNodes.filter { it.task.category == filter.removePrefix("cat:") }
+        val doneTop = visible.count { it.task.done }
         UiState(
             nodes = visible,
             allNodes = tree,
@@ -101,12 +110,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 CategoryUi(
                     name = c.name,
                     color = parseHex(c.colorHex),
-                    count = tree.count { it.task.category == c.name },
+                    count = todayNodes.count { it.task.category == c.name },
                 )
             },
             filter = filter,
             done = doneTop,
-            total = tree.size,
+            total = visible.size,
+            todayTotal = todayNodes.size,
             completedTotal = logs.size,
             logs = logs,
             doneTasks = doneTasks,
@@ -305,4 +315,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun clearVoiceDraft() {
         voiceDraft = null
     }
+}
+
+/**
+ * 首页「今日待办」的顶级任务展示判定：
+ * - 未整体完成（顶级任务自己没勾上，或其子任务没全做完）→ 始终展示。
+ * - 整体完成（顶级任务 + 全部子任务都完成）→ 只有完成日期是「今天」才留在今日待办；
+ *   完成于今天之前（或完成时间缺失 / 异常日期）的都从首页移除，历史完成记录只看月视图。
+ * 只作用于顶级任务，子任务不做单独过滤，因此凡是展示的顶级任务其全部子任务都会完整带出。
+ */
+private fun showInToday(node: TaskNode, today: LocalDate): Boolean {
+    val fullyDone = node.task.done && (!node.hasChildren || node.allChildrenDone)
+    if (!fullyDone) return true
+    val completedDate = node.task.completedAt?.let {
+        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+    }
+    return completedDate == today
 }

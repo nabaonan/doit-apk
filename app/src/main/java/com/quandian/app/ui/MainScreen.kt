@@ -286,7 +286,7 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit) {
 
         PillTabs(
             tabs = buildList {
-                add(PillTab(key = "all", label = "全部", badge = state.allNodes.size, accent = QD.Accent))
+                add(PillTab(key = "all", label = "全部", badge = state.todayTotal, accent = QD.Accent))
                 state.categories.forEach { c ->
                     add(PillTab(key = "cat:${c.name}", label = c.name, badge = c.count, accent = c.color))
                 }
