@@ -38,6 +38,8 @@ sealed interface Sheet {
     data class Subtask(val taskId: Long) : Sheet
     /** [category] 为用户打开表单时的页面筛选分类（"cat:X" / "all"），新增表单据此预选默认分类 */
     data class NewTask(val category: String) : Sheet
+    /** 编辑已有任务（父任务 / 子任务均可），复用新增表单弹层 */
+    data class EditTask(val taskId: Long) : Sheet
     data object Categories : Sheet
     data class ConfirmDelete(val taskId: Long) : Sheet
     data class ConfirmCategory(val name: String) : Sheet
@@ -221,6 +223,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             repo.moveToCategory(taskId, category)
             say(if (childCount > 0) "已连同 $childCount 个子任务移到「$category」" else "已移到「$category」")
+        }
+    }
+
+    fun updateTask(taskId: Long, title: String, category: String) {
+        viewModelScope.launch {
+            repo.updateTask(taskId, title, category)
+            say("已更新「${title.trim()}」")
         }
     }
 

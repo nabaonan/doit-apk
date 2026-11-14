@@ -69,6 +69,7 @@ class TaskCallbacks(
     val onToggle: (TaskNode) -> Unit,
     val onComplete: (TaskNode) -> Unit,
     val onBlocked: () -> Unit,
+    val onEdit: (TaskNode) -> Unit,
     val onPriority: (TaskNode) -> Unit,
     val onCategory: (TaskNode) -> Unit,
     val onSubtask: (TaskNode) -> Unit,
@@ -197,8 +198,8 @@ fun TopTaskRow(
     val task = node.task
     val density = LocalDensity.current
     // 让位距离 = 动作槽的实测总宽，滑开时刚好露完。
-    // 已完成的任务只露「删除」一个槽；未完成的露全部四个。
-    val actionCount = if (task.done) 1 else 4
+    // 已完成的任务只露「编辑｜删除」两个槽；未完成的露「编辑｜优先级｜分类｜子任务｜删除」全部五个。
+    val actionCount = if (task.done) 2 else 5
     val actionWidth = ActionMetrics.widthOf(actionCount)
     val actionPx = with(density) { actionWidth.toPx() }
     // 已完成也能左滑删除：enabled 始终为真；右滑完成只在未完成时有效
@@ -254,7 +255,7 @@ fun TopTaskRow(
             // 动作区底色（只覆盖卡片让开的那部分）
             ActionBackdrop(state, radius = 19.dp, modifier = Modifier.matchParentSize())
 
-            // 左滑让开后露出的动作：已完成的只露「删除」；未完成的才是全部四个
+            // 左滑让开后露出的动作：编辑始终可点（含已完成），未完成的另加优先级/分类/子任务，删除可点
             Row(
                 modifier = Modifier
                     .matchParentSize()
@@ -262,6 +263,9 @@ fun TopTaskRow(
                 horizontalArrangement = Arrangement.spacedBy(ActionMetrics.Gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                RowScopeAction("编辑", DoitIconKind.Pencil, ActionColors.Edit) {
+                    state.reset(); cb.onEdit(node)
+                }
                 if (!task.done) {
                     RowScopeAction("优先级", DoitIconKind.Flag, ActionColors.Priority) {
                         state.reset(); cb.onPriority(node)
@@ -407,8 +411,8 @@ private fun SubtaskRow(
 ) {
     val task = node.task
     val done = task.done
-    // 已完成只剩「删除」一个动作；同样是 ActionMetrics 算出来的宽度
-    val actionCount = if (done) 1 else 3
+    // 已完成只剩「编辑｜删除」；未完成的是「编辑｜优先级｜子任务｜删除」
+    val actionCount = if (done) 2 else 4
     val actionWidth = ActionMetrics.widthOf(actionCount)
     val density = LocalDensity.current
     val actionPx = with(density) { actionWidth.toPx() }
@@ -466,11 +470,18 @@ private fun SubtaskRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (!done) {
+                    RowScopeAction(null, DoitIconKind.Pencil, ActionColors.Edit) {
+                        state.reset(); cb.onEdit(node)
+                    }
                     RowScopeAction(null, DoitIconKind.Flag, ActionColors.Priority) {
                         state.reset(); cb.onPriority(node)
                     }
                     RowScopeAction(null, DoitIconKind.Sub, ActionColors.Subtask) {
                         state.reset(); cb.onSubtask(node)
+                    }
+                } else {
+                    RowScopeAction(null, DoitIconKind.Pencil, ActionColors.Edit) {
+                        state.reset(); cb.onEdit(node)
                     }
                 }
                 RowScopeAction(null, DoitIconKind.Trash, ActionColors.Delete) {

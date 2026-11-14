@@ -23,7 +23,7 @@ import kotlin.math.sin
  * 与视觉稿里的 SVG 图标保持同一套语汇（圆、圆角、细线）。
  */
 enum class DoitIconKind {
-    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar,
+    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar, Pencil,
 }
 
 @Composable
@@ -254,6 +254,14 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
             line(8f, 3.2f, 8f, 6f)
             line(16f, 3.2f, 16f, 6f)
             line(4.5f, 11.2f, 19.5f, 11.2f)
+        }
+
+        DoitIconKind.Pencil -> {
+            // 编辑：一支斜放的铅笔——两条平行笔身 + 右上擦头 + 左下收尖
+            line(7f, 17f, 17f, 7f)       // 笔身左缘
+            line(9.2f, 15.2f, 19.2f, 5.2f) // 笔身右缘（平行）
+            line(7f, 17f, 4.2f, 19.8f)   // 笔尖（左下收尖）
+            line(17f, 7f, 19.8f, 4.2f)   // 擦头（右上）
         }
     }
 }

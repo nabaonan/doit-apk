@@ -210,6 +210,7 @@ fun checkFill(ring: Color): Color = if (Doit.IsDark) ring else fillFor(ring)
 
 /** 左滑动作区的语义图标色（各动作固定含义，不随主题变） */
 object ActionColors {
+    val Edit = Color(0xFF6C8CA6)      // 编辑 · 青灰蓝
     val Priority = Color(0xFF4A9BD8)  // 优先级 · 蓝
     val Category = Color(0xFF8F86CE)  // 分类 · 紫
     val Subtask = Color(0xFF2AA98C)   // 子任务 · 绿

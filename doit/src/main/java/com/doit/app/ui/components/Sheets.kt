@@ -188,6 +188,7 @@ fun SheetHost(
     categories: List<com.doit.app.ui.CategoryUi>,
     onDismiss: () -> Unit,
     onNewTask: (String, String) -> Unit,
+    onSaveTask: (Long, String, String) -> Unit,
     onPriority: (Long, Int) -> Unit,
     onMoveCategory: (Long, String, Int) -> Unit,
     onAddSubtask: (Long, String, Int) -> Unit,
@@ -211,6 +212,7 @@ fun SheetHost(
             is Sheet.Priority -> sheet.taskId
             is Sheet.MoveCategory -> sheet.taskId
             is Sheet.Subtask -> sheet.taskId
+            is Sheet.EditTask -> sheet.taskId
             is Sheet.ConfirmDelete -> sheet.taskId
             else -> null
         }
@@ -222,6 +224,7 @@ fun SheetHost(
         is Sheet.MoveCategory -> "移动分类"
         is Sheet.Subtask -> "拆成几步"
         is Sheet.NewTask -> "添加待办"
+        is Sheet.EditTask -> "编辑待办"
         Sheet.Categories -> "管理分类"
         is Sheet.ConfirmDelete -> "确认删除"
         is Sheet.ConfirmCategory -> "删除分类"
@@ -257,13 +260,25 @@ fun SheetHost(
             }
 
             when (sheet) {
-                is Sheet.NewTask -> NewTaskBody(
+                is Sheet.NewTask -> TaskFormBody(
                     categories = categories,
+                    initialText = voiceDraft ?: "",
                     defaultCategory = sheet.category,
                     voiceDraft = voiceDraft,
                     onVoiceConsumed = onVoiceConsumed,
                     onSubmit = { text, cat ->
                         onNewTask(text, cat); close()
+                    },
+                )
+
+                is Sheet.EditTask -> TaskFormBody(
+                    categories = categories,
+                    initialText = target?.task?.title ?: "",
+                    defaultCategory = target?.task?.category ?: "",
+                    voiceDraft = null,
+                    onVoiceConsumed = {},
+                    onSubmit = { text, cat ->
+                        onSaveTask(sheet.taskId, text, cat); close()
                     },
                 )
 
@@ -352,14 +367,15 @@ private fun SheetNote(text: String) {
 }
 
 @Composable
-private fun NewTaskBody(
+private fun TaskFormBody(
     categories: List<com.doit.app.ui.CategoryUi>,
+    initialText: String,
     defaultCategory: String,
     voiceDraft: String?,
     onVoiceConsumed: () -> Unit,
     onSubmit: (String, String) -> Unit,
 ) {
-    var text by remember { mutableStateOf(voiceDraft ?: "") }
+    var text by remember(initialText) { mutableStateOf(initialText) }
     // 默认选中「当前所在分类」：顶部切到某分类后点 +，这里就预选它；顶部在「全部」时默认「不分类」。
     // 每次打开都会按当时的页面分类重新预选（remember 的 key 带上 defaultCategory），
     // 手动仍可随时用下面的胶囊切到任意分类（含「不分类」），加完再开仍回到正确默认值。
@@ -405,10 +421,11 @@ private fun NewTaskBody(
     }
 }
 
-/** 从页面筛选串解析新增表单的默认分类：「cat:X」→ X（且分类仍存在才用），否则视为不分类 */
-private fun initialNewTaskCategory(filter: String, categories: List<com.doit.app.ui.CategoryUi>): String {
-    val name = filter.removePrefix("cat:")
-    return if (name != filter && categories.any { it.name == name }) name else NO_CATEGORY
+/** 解析表单默认分类：入参可能是页面筛选串（"all" / "cat:X"）或任务自身的分类名（"X" / ""）。 */
+private fun initialNewTaskCategory(preferred: String, categories: List<com.doit.app.ui.CategoryUi>): String {
+    val stripped = preferred.removePrefix("cat:")
+    val name = if (stripped == "all") NO_CATEGORY else stripped
+    return if (name != NO_CATEGORY && categories.any { it.name == name }) name else NO_CATEGORY
 }
 
 @Composable

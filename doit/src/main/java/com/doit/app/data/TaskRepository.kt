@@ -274,6 +274,20 @@ class TaskRepository(private val db: DoitDatabase) {
         }
     }
 
+    /**
+     * 编辑任务：标题只改自己；分类若变化则整体级联到该任务及其全部子孙（与「移动分类」一致），
+     * 保持父子层级分类一致。每次编辑刷新 updatedAt，保证能同步到另一台设备。
+     */
+    suspend fun updateTask(id: Long, title: String, category: String) {
+        db.withTransaction {
+            val task = taskDao.byId(id) ?: return@withTransaction
+            val text = title.trim()
+            taskDao.update(task.copy(title = text, category = category, updatedAt = nowMs()))
+            val children = descendantIds(id).filter { it != id }
+            if (children.isNotEmpty()) taskDao.setCategory(children, category, nowMs())
+        }
+    }
+
     /** 软删除：留下墓碑，删除动作才能同步到另一台设备，而不是被当成「本地没有这条」 */
     suspend fun delete(id: Long) {
         db.withTransaction {
