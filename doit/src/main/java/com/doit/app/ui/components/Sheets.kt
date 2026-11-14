@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -253,7 +254,8 @@ fun SheetHost(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .imePadding(),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = titleStyle, modifier = Modifier.weight(1f))
@@ -270,6 +272,7 @@ fun SheetHost(
                     onSubmit = { text, cat ->
                         onNewTask(text, cat); close()
                     },
+                    onCancel = { close() },
                 )
 
                 // 顶级父任务：复刻「添加待办」表单——标题 + 分类（默认预选当前分类，仍可手动切换）；
@@ -284,6 +287,7 @@ fun SheetHost(
                         onSubmit = { text, cat ->
                             onSaveTask(sheet.taskId, text, cat); close()
                         },
+                        onCancel = { close() },
                     )
                 } else {
                     EditSubtaskBody(
@@ -291,6 +295,7 @@ fun SheetHost(
                         onSubmit = { text, prio ->
                             onSaveSubtask(sheet.taskId, text, prio); close()
                         },
+                        onCancel = { close() },
                     )
                 }
 
@@ -315,6 +320,7 @@ fun SheetHost(
                     onSubmit = { text, prio ->
                         onAddSubtask(sheet.taskId, text, prio); close()
                     },
+                    onCancel = { close() },
                 )
 
                 Sheet.Categories -> CategoriesBody(
@@ -322,6 +328,7 @@ fun SheetHost(
                     onAdd = onAddCategory,
                     onColor = onCategoryColor,
                     onDelete = onDeleteCategory,
+                    onDone = { close() },
                 )
 
                 is Sheet.ConfirmDelete -> ConfirmDeleteBody(
@@ -386,6 +393,7 @@ private fun TaskFormBody(
     voiceDraft: String?,
     onVoiceConsumed: () -> Unit,
     onSubmit: (String, String) -> Unit,
+    onCancel: () -> Unit,
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
     // 默认选中「当前所在分类」：顶部切到某分类后点 +，这里就预选它；顶部在「全部」时默认「不分类」。
@@ -402,18 +410,14 @@ private fun TaskFormBody(
     }
 
     Spacer(Modifier.height(14.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        DoitTextField(
-            value = text,
-            onValueChange = { if (it.length <= 30) text = it },
-            placeholder = "比如：给妈妈回个电话",
-            focusRequester = focus,
-            onEnter = { if (text.isNotBlank()) onSubmit(text, cat) },
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        SubmitButton(enabled = text.isNotBlank()) { onSubmit(text, cat) }
-    }
+    DoitTextField(
+        value = text,
+        onValueChange = { if (it.length <= 30) text = it },
+        placeholder = "比如：给妈妈回个电话",
+        focusRequester = focus,
+        onEnter = { if (text.isNotBlank()) onSubmit(text, cat) },
+        modifier = Modifier.fillMaxWidth(),
+    )
     if (categories.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         PillTabs(
@@ -431,6 +435,12 @@ private fun TaskFormBody(
     } else {
         SheetNote("还没有分类。想归类的话，先到「管理分类」里建一个。")
     }
+    CancelSaveBar(
+        onCancel = onCancel,
+        onSave = { if (text.isNotBlank()) onSubmit(text, cat) },
+        saveEnabled = text.isNotBlank(),
+        saveLabel = "保存",
+    )
 }
 
 /** 解析表单默认分类：入参可能是页面筛选串（"all" / "cat:X"）或任务自身的分类名（"X" / ""）。 */
@@ -520,7 +530,7 @@ private fun MoveCategoryBody(
 }
 
 @Composable
-private fun SubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
+private fun SubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit, onCancel: () -> Unit) {
     var text by remember { mutableStateOf("") }
     var prio by remember { mutableStateOf(Priority.MID.level) }
     val focus = remember { FocusRequester() }
@@ -532,20 +542,16 @@ private fun SubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
         if (node?.hasChildren == true) "这一步还能继续往下拆。它的下一步全部做完时，它也会自动勾上。"
         else "子任务全部做完，这件事会自动勾上，不用再手动点。",
     )
-    SheetDesc("写好内容，选好轻重，一次添加：")
+    SheetDesc("写好内容，选好轻重，点保存就加一条：")
     Spacer(Modifier.height(12.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        DoitTextField(
-            value = text,
-            onValueChange = { if (it.length <= 24) text = it },
-            placeholder = "比如：先列好提纲",
-            focusRequester = focus,
-            onEnter = { if (text.isNotBlank()) onSubmit(text, prio) },
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        SubmitButton(enabled = text.isNotBlank(), label = "添加") { onSubmit(text, prio) }
-    }
+    DoitTextField(
+        value = text,
+        onValueChange = { if (it.length <= 24) text = it },
+        placeholder = "比如：先列好提纲",
+        focusRequester = focus,
+        onEnter = { if (text.isNotBlank()) onSubmit(text, prio) },
+        modifier = Modifier.fillMaxWidth(),
+    )
     Spacer(Modifier.height(10.dp))
     PillTabs(
         tabs = Priority.entries.filter { it != Priority.NONE }.reversed().map { p ->
@@ -558,7 +564,13 @@ private fun SubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
         height = 34.dp,
         gap = 7.dp,
     )
-    SheetNote("添加后立即生效并收起面板；想继续加，再点一次「子任务」就好。删除请到卡片上左滑。")
+    SheetNote("保存后立即生效并收起面板；想继续加，再点一次「子任务」就好。删除请到卡片上左滑。")
+    CancelSaveBar(
+        onCancel = onCancel,
+        onSave = { if (text.isNotBlank()) onSubmit(text, prio) },
+        saveEnabled = text.isNotBlank(),
+        saveLabel = "保存",
+    )
 }
 
 /**
@@ -566,7 +578,7 @@ private fun SubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
  * 子任务的分类始终跟随父任务，这里既不显示也不可单独设置；预填当前标题与优先级。
  */
 @Composable
-private fun EditSubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
+private fun EditSubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit, onCancel: () -> Unit) {
     val task = node?.task
     var text by remember(task?.id) { mutableStateOf(task?.title ?: "") }
     var prio by remember(task?.id) { mutableStateOf(task?.priority ?: Priority.MID.level) }
@@ -578,18 +590,14 @@ private fun EditSubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
     SheetDesc("子任务的分类始终跟随父任务，这里不需要、也不能单独设置。")
     SheetDesc("只能改标题和轻重缓急，改好点保存：")
     Spacer(Modifier.height(12.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        DoitTextField(
-            value = text,
-            onValueChange = { if (it.length <= 24) text = it },
-            placeholder = "子任务标题",
-            focusRequester = focus,
-            onEnter = { if (text.isNotBlank()) onSubmit(text, prio) },
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        SubmitButton(enabled = text.isNotBlank(), label = "保存") { onSubmit(text, prio) }
-    }
+    DoitTextField(
+        value = text,
+        onValueChange = { if (it.length <= 24) text = it },
+        placeholder = "子任务标题",
+        focusRequester = focus,
+        onEnter = { if (text.isNotBlank()) onSubmit(text, prio) },
+        modifier = Modifier.fillMaxWidth(),
+    )
     Spacer(Modifier.height(10.dp))
     PillTabs(
         tabs = Priority.entries.filter { it != Priority.NONE }.reversed().map { p ->
@@ -602,6 +610,12 @@ private fun EditSubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
         height = 34.dp,
         gap = 7.dp,
     )
+    CancelSaveBar(
+        onCancel = onCancel,
+        onSave = { if (text.isNotBlank()) onSubmit(text, prio) },
+        saveEnabled = text.isNotBlank(),
+        saveLabel = "保存",
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -611,6 +625,7 @@ private fun CategoriesBody(
     onAdd: (String) -> Unit,
     onColor: (String, String) -> Unit,
     onDelete: (String) -> Unit,
+    onDone: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
     var paletteFor by remember { mutableStateOf<String?>(null) }
@@ -672,21 +687,22 @@ private fun CategoriesBody(
         }
     }
     Spacer(Modifier.height(12.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        DoitTextField(
-            value = text,
-            onValueChange = { if (it.length <= 8) text = it },
-            placeholder = "新分类，回车添加",
-            focusRequester = focus,
-            onEnter = { if (text.isNotBlank()) { onAdd(text); text = "" } },
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        SubmitButton(enabled = text.isNotBlank(), label = "添加") {
-            onAdd(text); text = ""
-        }
-    }
+    DoitTextField(
+        value = text,
+        onValueChange = { if (it.length <= 8) text = it },
+        placeholder = "新分类，回车添加",
+        focusRequester = focus,
+        // 回车仍可快速连加多个分类；点底部「保存」则加完并收起面板
+        onEnter = { if (text.isNotBlank()) { onAdd(text); text = "" } },
+        modifier = Modifier.fillMaxWidth(),
+    )
     SheetNote("删除分类不会删掉里面的待办，它们会变成未分类。")
+    CancelSaveBar(
+        onCancel = onDone,
+        onSave = { if (text.isNotBlank()) { onAdd(text); onDone() } },
+        saveEnabled = text.isNotBlank(),
+        saveLabel = "保存",
+    )
 }
 
 /** 分类卡片：左滑露出 颜色 / 删除 */
@@ -774,23 +790,58 @@ private fun ConfirmCategoryBody(name: String, count: Int, onConfirm: () -> Unit,
     SheetNote("删除分类不会删掉待办，只是换了个归属。")
 }
 
+/**
+ * 弹框底部统一的「取消 / 保存」操作条：左右各占一半、中间留间距，
+ * 保存为实色主题色（AccentFill），取消为描边次按钮。与确认弹框的 [SheetActions]
+ * 同一套尺寸（48dp 高、圆角矩形），手指不用瞄着小胶囊点。
+ */
 @Composable
-private fun SubmitButton(enabled: Boolean, label: String = "添加", onClick: () -> Unit) {
-    Box(
-        Modifier
-            .height(40.dp)
-            .clip(FieldsShape)
-            .background(if (enabled) Doit.AccentFill else Doit.Line)
-            .tapFeedback(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 15.dp),
-        contentAlignment = Alignment.Center,
+private fun CancelSaveBar(
+    onCancel: () -> Unit,
+    onSave: () -> Unit,
+    saveEnabled: Boolean = true,
+    saveLabel: String = "保存",
+) {
+    Spacer(Modifier.height(18.dp))
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            label,
-            fontSize = 12.sp,
-            color = if (enabled) Doit.OnAccent else Doit.InkFaint,
-            letterSpacing = 0.4.sp,
-        )
+        Box(
+            Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(ActionShape)
+                .border(1.dp, Doit.Line, ActionShape)
+                .tapFeedback { onCancel() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "取消",
+                fontSize = 13.sp,
+                color = Doit.InkSoft,
+                letterSpacing = 0.5.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Box(
+            Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(ActionShape)
+                .background(if (saveEnabled) Doit.AccentFill else Doit.Line)
+                .tapFeedback(enabled = saveEnabled) { onSave() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                saveLabel,
+                fontSize = 13.sp,
+                color = if (saveEnabled) Doit.OnAccent else Doit.InkFaint,
+                letterSpacing = 0.5.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
