@@ -39,7 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.quandian.app.BuildConfig
 import com.quandian.app.data.TaskNode
 import com.quandian.app.ui.components.Breather
 import com.quandian.app.ui.components.FabOrbit
@@ -192,7 +191,8 @@ fun MainScreen(vm: MainViewModel) {
                     onDavEnabled = vm::setDavEnabled,
                     onTest = vm::testDav,
                     onSaveSync = vm::syncDav,
-                    onCheckUpdate = { vm.say("当前已是最新版本 v${BuildConfig.VERSION_NAME}") },
+                    onCheckUpdate = vm::checkUpdate,
+                    onGithubToken = vm::setGithubToken,
                     onToast = vm::say,
                 )
             }

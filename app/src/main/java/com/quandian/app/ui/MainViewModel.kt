@@ -15,6 +15,7 @@ import com.quandian.app.data.buildTree
 import com.quandian.app.sync.DavUrl
 import com.quandian.app.sync.SyncEngine
 import com.quandian.app.sync.WebDavClient
+import com.quandian.app.update.UpdateChecker
 import com.quandian.app.ui.theme.FlowSkin
 import com.quandian.app.ui.theme.parseHex
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -262,6 +263,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch { settingsRepo.setThemeMode(mode) }
+    }
+
+    fun setGithubToken(token: String) {
+        viewModelScope.launch { settingsRepo.setGithubToken(token.trim()) }
+    }
+
+    /** 真正去 GitHub Releases 拉最新版本比对，不再写死“已是最新” */
+    fun checkUpdate() {
+        viewModelScope.launch {
+            say("正在检查更新…")
+            val token = settingsRepo.current().githubToken.ifBlank { null }
+            val result = UpdateChecker.check(BuildConfig.VERSION_NAME, token)
+            say(result.message)
+        }
     }
 
     fun setDavEnabled(enabled: Boolean) {

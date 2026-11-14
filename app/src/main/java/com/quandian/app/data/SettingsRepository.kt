@@ -29,6 +29,8 @@ data class AppSettings(
     val syncBase: String = "",
     val syncRevision: Long = 0L,
     val deviceId: String = "",
+    /** 可选：GitHub 只读 Token，私有仓库「检查更新」用，留空则匿名请求 */
+    val githubToken: String = "",
 )
 
 class SettingsRepository(private val context: Context) {
@@ -45,6 +47,7 @@ class SettingsRepository(private val context: Context) {
         val syncBase = stringPreferencesKey("sync_base")
         val syncRevision = longPreferencesKey("sync_revision")
         val deviceId = stringPreferencesKey("device_id")
+        val githubToken = stringPreferencesKey("github_token")
     }
 
     val settings: Flow<AppSettings> = context.settingsStore.data.map { p ->
@@ -60,6 +63,7 @@ class SettingsRepository(private val context: Context) {
             syncBase = p[Keys.syncBase] ?: "",
             syncRevision = p[Keys.syncRevision] ?: 0L,
             deviceId = p[Keys.deviceId] ?: "",
+            githubToken = p[Keys.githubToken] ?: "",
         )
     }
 
@@ -76,6 +80,8 @@ class SettingsRepository(private val context: Context) {
         it[Keys.davUser] = user
         it[Keys.davPass] = pass
     }
+
+    suspend fun setGithubToken(token: String) = context.settingsStore.edit { it[Keys.githubToken] = token }
 
     suspend fun setLastSync(text: String) = context.settingsStore.edit { it[Keys.lastSync] = text }
 

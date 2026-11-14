@@ -7,15 +7,16 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// 本地签名配置：优先取 local.properties / 环境变量 / keystore/ 目录里的发布证书，
-// 找不到时回退到 debug 证书，保证任何一台机器（含 CI）都能产出可安装的 APK。
+// 本地签名配置：**仓库内的 keystore/quandian-release.jks 是唯一正式签名**，
+// 本地、CI、后续每个 release 都用同一把证书，保证新版本能覆盖旧版本安装
+// （之前 CI 回退到每次运行都不同的 debug 证书，导致“签名不一致”无法升级）。
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val releaseStorePath: String? = System.getenv("QUANDIAN_KEYSTORE")
+val releaseStorePath: String? = rootProject.file("keystore/quandian-release.jks").takeIf { it.exists() }?.absolutePath
+    ?: System.getenv("QUANDIAN_KEYSTORE")
     ?: keystoreProps.getProperty("storeFile")?.let { rootProject.file(it).absolutePath }
-    ?: rootProject.file("keystore/quandian-release.jks").takeIf { it.exists() }?.absolutePath
 
 // ---- 版本号：完全由 git tag 推导，不再手改 ----
 // 打 v1.2.3 这个 tag，出来的就是 versionName=1.2.3、versionCode=10203；

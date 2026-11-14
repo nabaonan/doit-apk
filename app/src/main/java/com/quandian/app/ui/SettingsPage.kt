@@ -72,6 +72,7 @@ fun SettingsPage(
     onTest: (String, String, String) -> Unit,
     onSaveSync: (String, String, String) -> Unit,
     onCheckUpdate: () -> Unit,
+    onGithubToken: (String) -> Unit,
     onToast: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -84,6 +85,8 @@ fun SettingsPage(
     val urlInvalid = urlTouched && urlError != null
     // 三栏都填了才让按钮亮起来
     val canSubmit = url.isNotBlank() && user.isNotBlank() && pass.isNotBlank()
+    // 检查更新用的 GitHub Token，失焦时保存
+    var githubToken by remember(settings.githubToken) { mutableStateOf(settings.githubToken) }
     val scroll = rememberScrollState()
 
     fun checkUrl(): Boolean {
@@ -268,6 +271,22 @@ fun SettingsPage(
                     Text("当前版本", fontSize = 13.sp, color = QD.Ink, modifier = Modifier.weight(1f))
                     Text("v${BuildConfig.VERSION_NAME}", style = numeric(12).copy(fontSize = 12.sp), color = QD.InkSoft)
                 }
+                Spacer(Modifier.height(6.dp))
+                SettingField(
+                    value = githubToken,
+                    onChange = { if (it.length <= 200) githubToken = it },
+                    onFocusChange = { focused -> if (!focused) onGithubToken(githubToken) },
+                    placeholder = "GitHub Token（可选，私有仓库检查更新用）",
+                    password = true,
+                )
+                Text(
+                    "项目是私有仓库，匿名调用 GitHub API 会被拒绝；填一个只读 TOKEN（contents:read）即可正常检查更新，留空也能点，但会提示失败。",
+                    fontSize = 10.sp,
+                    color = QD.InkFaint,
+                    lineHeight = 15.sp,
+                    modifier = Modifier.padding(start = 13.dp, top = 6.dp, end = 4.dp),
+                )
+                Spacer(Modifier.height(10.dp))
                 PillButton("检查更新", primary = false, modifier = Modifier.fillMaxWidth()) { onCheckUpdate() }
                 Text(
                     "doit · 把清单，写在一张纸上。",
