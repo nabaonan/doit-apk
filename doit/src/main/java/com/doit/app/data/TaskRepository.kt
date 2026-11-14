@@ -288,6 +288,15 @@ class TaskRepository(private val db: DoitDatabase) {
         }
     }
 
+    /**
+     * 编辑子任务：标题与优先级只改自己；分类不在编辑范围里（子任务不允许单独设置分类，
+     * 始终跟随父任务），也不做任何覆盖，保证父子层级分类一致。
+     */
+    suspend fun updateSubtask(id: Long, title: String, priority: Int) {
+        val task = taskDao.byId(id) ?: return
+        taskDao.update(task.copy(title = title.trim(), priority = priority, updatedAt = nowMs()))
+    }
+
     /** 软删除：留下墓碑，删除动作才能同步到另一台设备，而不是被当成「本地没有这条」 */
     suspend fun delete(id: Long) {
         db.withTransaction {

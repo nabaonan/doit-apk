@@ -217,6 +217,7 @@ fun MainScreen(vm: MainViewModel) {
             onDismiss = vm::closeSheet,
             onNewTask = { text, cat -> vm.addTask(text, cat) },
             onSaveTask = { id, text, cat -> vm.updateTask(id, text, cat) },
+            onSaveSubtask = { id, text, prio -> vm.updateSubtask(id, text, prio) },
             onPriority = { id, level -> vm.setPriority(id, level) },
             onMoveCategory = { id, cat, n -> vm.moveCategory(id, cat, n) },
             onAddSubtask = { id, text, prio -> vm.addSubtask(id, text, prio) },

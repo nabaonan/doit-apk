@@ -199,7 +199,7 @@ fun TopTaskRow(
     val density = LocalDensity.current
     // 让位距离 = 动作槽的实测总宽，滑开时刚好露完。
     // 已完成的任务只露「编辑｜删除」两个槽；未完成的露「编辑｜优先级｜分类｜子任务｜删除」全部五个。
-    val actionCount = if (task.done) 2 else 5
+    val actionCount = if (task.done) 1 else 5
     val actionWidth = ActionMetrics.widthOf(actionCount)
     val actionPx = with(density) { actionWidth.toPx() }
     // 已完成也能左滑删除：enabled 始终为真；右滑完成只在未完成时有效
@@ -255,7 +255,8 @@ fun TopTaskRow(
             // 动作区底色（只覆盖卡片让开的那部分）
             ActionBackdrop(state, radius = 19.dp, modifier = Modifier.matchParentSize())
 
-            // 左滑让开后露出的动作：编辑始终可点（含已完成），未完成的另加优先级/分类/子任务，删除可点
+            // 左滑让开后露出的动作：未完成的可编辑（编辑/优先级/分类/子任务）+ 删除；
+            // 已完成的不提供编辑入口，只露「删除」（历史完成记录不允许再改）。
             Row(
                 modifier = Modifier
                     .matchParentSize()
@@ -263,10 +264,10 @@ fun TopTaskRow(
                 horizontalArrangement = Arrangement.spacedBy(ActionMetrics.Gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RowScopeAction("编辑", DoitIconKind.Pencil, ActionColors.Edit) {
-                    state.reset(); cb.onEdit(node)
-                }
                 if (!task.done) {
+                    RowScopeAction("编辑", DoitIconKind.Pencil, ActionColors.Edit) {
+                        state.reset(); cb.onEdit(node)
+                    }
                     RowScopeAction("优先级", DoitIconKind.Flag, ActionColors.Priority) {
                         state.reset(); cb.onPriority(node)
                     }
@@ -412,7 +413,7 @@ private fun SubtaskRow(
     val task = node.task
     val done = task.done
     // 已完成只剩「编辑｜删除」；未完成的是「编辑｜优先级｜子任务｜删除」
-    val actionCount = if (done) 2 else 4
+    val actionCount = if (done) 1 else 4
     val actionWidth = ActionMetrics.widthOf(actionCount)
     val density = LocalDensity.current
     val actionPx = with(density) { actionWidth.toPx() }
@@ -469,6 +470,8 @@ private fun SubtaskRow(
                 horizontalArrangement = Arrangement.spacedBy(ActionMetrics.Gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // 未完成：编辑/优先级/子任务（子任务本就无「分类」动作，分类跟随父任务）+ 删除；
+                // 已完成：不提供编辑入口，只露「删除」。
                 if (!done) {
                     RowScopeAction(null, DoitIconKind.Pencil, ActionColors.Edit) {
                         state.reset(); cb.onEdit(node)
@@ -478,10 +481,6 @@ private fun SubtaskRow(
                     }
                     RowScopeAction(null, DoitIconKind.Sub, ActionColors.Subtask) {
                         state.reset(); cb.onSubtask(node)
-                    }
-                } else {
-                    RowScopeAction(null, DoitIconKind.Pencil, ActionColors.Edit) {
-                        state.reset(); cb.onEdit(node)
                     }
                 }
                 RowScopeAction(null, DoitIconKind.Trash, ActionColors.Delete) {

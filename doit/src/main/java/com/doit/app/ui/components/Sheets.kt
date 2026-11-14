@@ -189,6 +189,7 @@ fun SheetHost(
     onDismiss: () -> Unit,
     onNewTask: (String, String) -> Unit,
     onSaveTask: (Long, String, String) -> Unit,
+    onSaveSubtask: (Long, String, Int) -> Unit,
     onPriority: (Long, Int) -> Unit,
     onMoveCategory: (Long, String, Int) -> Unit,
     onAddSubtask: (Long, String, Int) -> Unit,
@@ -271,16 +272,27 @@ fun SheetHost(
                     },
                 )
 
-                is Sheet.EditTask -> TaskFormBody(
-                    categories = categories,
-                    initialText = target?.task?.title ?: "",
-                    defaultCategory = target?.task?.category ?: "",
-                    voiceDraft = null,
-                    onVoiceConsumed = {},
-                    onSubmit = { text, cat ->
-                        onSaveTask(sheet.taskId, text, cat); close()
-                    },
-                )
+                // 顶级父任务：复刻「添加待办」表单——标题 + 分类（默认预选当前分类，仍可手动切换）；
+                // 子任务：复刻「拆成几步」表单——只允许改标题与优先级，分类跟随父任务、不提供也不可设置。
+                is Sheet.EditTask -> if (target?.task?.parentId == null) {
+                    TaskFormBody(
+                        categories = categories,
+                        initialText = target?.task?.title ?: "",
+                        defaultCategory = target?.task?.category ?: "",
+                        voiceDraft = null,
+                        onVoiceConsumed = {},
+                        onSubmit = { text, cat ->
+                            onSaveTask(sheet.taskId, text, cat); close()
+                        },
+                    )
+                } else {
+                    EditSubtaskBody(
+                        node = target,
+                        onSubmit = { text, prio ->
+                            onSaveSubtask(sheet.taskId, text, prio); close()
+                        },
+                    )
+                }
 
                 is Sheet.Priority -> PriorityBody(
                     task = target?.task,
@@ -547,6 +559,49 @@ private fun SubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
         gap = 7.dp,
     )
     SheetNote("添加后立即生效并收起面板；想继续加，再点一次「子任务」就好。删除请到卡片上左滑。")
+}
+
+/**
+ * 编辑子任务：与「拆成几步」（添加子任务）同一交互——只能改标题和轻重缓急，没有分类。
+ * 子任务的分类始终跟随父任务，这里既不显示也不可单独设置；预填当前标题与优先级。
+ */
+@Composable
+private fun EditSubtaskBody(node: TaskNode?, onSubmit: (String, Int) -> Unit) {
+    val task = node?.task
+    var text by remember(task?.id) { mutableStateOf(task?.title ?: "") }
+    var prio by remember(task?.id) { mutableStateOf(task?.priority ?: Priority.MID.level) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(320)
+        runCatching { focus.requestFocus() }
+    }
+    SheetDesc("子任务的分类始终跟随父任务，这里不需要、也不能单独设置。")
+    SheetDesc("只能改标题和轻重缓急，改好点保存：")
+    Spacer(Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        DoitTextField(
+            value = text,
+            onValueChange = { if (it.length <= 24) text = it },
+            placeholder = "子任务标题",
+            focusRequester = focus,
+            onEnter = { if (text.isNotBlank()) onSubmit(text, prio) },
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        SubmitButton(enabled = text.isNotBlank(), label = "保存") { onSubmit(text, prio) }
+    }
+    Spacer(Modifier.height(10.dp))
+    PillTabs(
+        tabs = Priority.entries.filter { it != Priority.NONE }.reversed().map { p ->
+            PillTab(key = p.level.toString(), label = p.label, accent = p.color)
+        } + PillTab(key = "0", label = "不设", accent = Doit.InkFaint),
+        selectedKey = prio.toString(),
+        onSelect = { prio = it.toInt() },
+        mode = PillTabsMode.Chip,
+        wrap = true,
+        height = 34.dp,
+        gap = 7.dp,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -233,6 +233,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 编辑子任务：只能改标题与优先级，分类跟随父任务不由这里设置 */
+    fun updateSubtask(taskId: Long, title: String, priority: Int) {
+        viewModelScope.launch {
+            repo.updateSubtask(taskId, title, priority)
+            say("已更新「${title.trim()}」")
+        }
+    }
+
     fun deleteTask(taskId: Long, title: String, childCount: Int, root: Boolean) {
         viewModelScope.launch {
             repo.delete(taskId)
