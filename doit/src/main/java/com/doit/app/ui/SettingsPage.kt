@@ -1,5 +1,6 @@
 package com.doit.app.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,6 +9,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +65,13 @@ import com.doit.app.ui.theme.ThemeMode
 import com.doit.app.ui.theme.numeric
 import com.doit.app.ui.theme.titleStyle
 
+/** 设置页顶部的分类胶囊：切换后下方内容区随之切换 */
+private enum class SettingsTab(val key: String, val label: String) {
+    APPEARANCE("appearance", "外观"),
+    SYNC("sync", "同步"),
+    ABOUT("about", "关于"),
+}
+
 @Composable
 fun SettingsPage(
     settings: AppSettings,
@@ -87,7 +98,8 @@ fun SettingsPage(
     val canSubmit = url.isNotBlank() && user.isNotBlank() && pass.isNotBlank()
     // 检查更新用的 GitHub Token，失焦时保存
     var githubToken by remember(settings.githubToken) { mutableStateOf(settings.githubToken) }
-    val scroll = rememberScrollState()
+    // 顶部分类胶囊：当前选中的分类
+    var tab by remember { mutableStateOf(SettingsTab.APPEARANCE) }
 
     fun checkUrl(): Boolean {
         urlTouched = true
@@ -99,33 +111,54 @@ fun SettingsPage(
         return true
     }
 
-    // 内容滚起来之后，标题栏底部浮出一条细线，和统计页保持同一种层级暗示
-    val stuck by animateFloatAsState(
-        targetValue = if (scroll.value > 4) 1f else 0f,
-        animationSpec = tween(180),
-        label = "settingsHeaderLine",
-    )
-
     Column(modifier.fillMaxSize().background(Doit.Surface)) {
         // ---------- 固定在顶部的标题 ----------
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 10.dp),
+                .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 8.dp),
         ) {
             PageHead(title = "设置", latin = "SETTINGS", onBack = onBack)
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Doit.Line.copy(alpha = 0.55f * stuck)))
 
-        // ---------- 可滚动的内容 ----------
+        // ---------- 固定顶部的分类胶囊（外观 / 同步 / 关于）----------
         Column(
             Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(scroll)
-                .padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 30.dp),
+                .padding(horizontal = 22.dp, vertical = 2.dp),
         ) {
-            // ---------- 主题 ----------
+            PillTabs(
+                tabs = SettingsTab.entries.map { PillTab(key = it.key, label = it.label, accent = Doit.Accent) },
+                selectedKey = tab.key,
+                onSelect = { key -> SettingsTab.entries.firstOrNull { it.key == key }?.let { tab = it } },
+                mode = PillTabsMode.Equal,
+                height = 38.dp,
+                gap = 7.dp,
+                indicatorColor = Doit.Accent,
+            )
+        }
+
+        // ---------- 按分类切换的内容（淡入 + 轻微上浮，切换自然）----------
+        AnimatedContent(
+            targetState = tab,
+            transitionSpec = {
+                (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 22 })
+                    .togetherWith(fadeOut(tween(130)) + slideOutVertically(tween(170)) { -it / 22 })
+            },
+            label = "settingsTabContent",
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) { t ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 30.dp),
+            ) {
+                when (t) {
+                    SettingsTab.APPEARANCE -> {
+                        // ---------- 主题 ----------
             SettingSection(title = "主题", caption = "清新绿 · 深夜青灰") {
                 PillTabs(
                     tabs = ThemeMode.entries.map { mode ->
@@ -160,8 +193,10 @@ fun SettingsPage(
                 )
             }
 
-            // ---------- 同步 ----------
-            SettingSection(title = "同步", caption = "WebDAV · 在多台设备之间保持一致") {
+                    }
+                    SettingsTab.SYNC -> {
+                        // ---------- 同步 ----------
+                        SettingSection(title = "同步", caption = "WebDAV · 在多台设备之间保持一致") {
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -262,8 +297,10 @@ fun SettingsPage(
                 }
             }
 
-            // ---------- 关于 ----------
-            SettingSection(title = "关于", caption = "一款清新绿的待办", last = true) {
+                    }
+                    SettingsTab.ABOUT -> {
+                        // ---------- 关于 ----------
+                        SettingSection(title = "关于", caption = "一款清新绿的待办", last = true) {
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -295,6 +332,9 @@ fun SettingsPage(
                     letterSpacing = 0.4.sp,
                     modifier = Modifier.padding(top = 10.dp),
                 )
+                    }
+                    }
+                }
             }
         }
     }
