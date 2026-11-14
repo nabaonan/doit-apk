@@ -139,22 +139,32 @@ private fun MonthBar(
     onNext: () -> Unit,
     onToday: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("${month.year}年${month.monthValue}月", style = titleStyle.copy(fontSize = 17.sp))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // 左侧平衡区：与右侧等权重，保证中间「上个月｜月份｜下个月」整组在工具栏水平居中
         Spacer(Modifier.weight(1f))
-        Text(
-            "回到今天",
-            fontSize = 12.sp,
-            color = QD.AccentInk,
-            letterSpacing = 0.4.sp,
-            modifier = Modifier
-                .tapFeedback { onToday() }
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        ChevronButton(dir = -1, onClick = onPrev)
-        Spacer(Modifier.width(4.dp))
-        ChevronButton(dir = 1, onClick = onNext)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ChevronButton(dir = -1, onClick = onPrev)
+            Spacer(Modifier.width(14.dp))
+            Text(
+                "${month.year}年${month.monthValue}月",
+                style = titleStyle.copy(fontSize = 17.sp),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.width(14.dp))
+            ChevronButton(dir = 1, onClick = onNext)
+        }
+        // 右侧平衡区：把「回到今天」顶到工具栏最右
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+            Text(
+                "回到今天",
+                fontSize = 12.sp,
+                color = QD.AccentInk,
+                letterSpacing = 0.4.sp,
+                modifier = Modifier
+                    .tapFeedback { onToday() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
