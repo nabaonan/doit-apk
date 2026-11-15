@@ -223,8 +223,9 @@ fun checkFill(ring: Color): Color = if (Doit.IsDark) ring else fillFor(ring)
  *    本来就分不清，换成冷蓝后对比度与辨识度都更好；
  *  - 删除用红、换色用金，沿用原有的破坏性 / 调色语义。
  *
- * 亮黄、橘黄、金这类浅实底上的图标由 [readableOn] 自动换成深墨字（白字只有 ~2:1，
- * 不够读），深紫 / 蓝 / 红仍配白字 —— 与项目里胶囊、实心块的取色规则一致。
+ * 所有动作的图标一律白色（不再有深墨 / 白两套）：圆底在 RowScopeAction 里统一经
+ * [fillFor] 等比压深到白图标够读（≥2.6:1），色相与饱和度不变，仍看得清是黄 / 橘黄。
+ * 压深只作用于黄、橘黄、金这几个浅底，紫 / 蓝 / 红原本就够对比度、保持原色。
  */
 object ActionColors {
     val Edit = Color(0xFFE6B62C)      // 编辑 · 黄

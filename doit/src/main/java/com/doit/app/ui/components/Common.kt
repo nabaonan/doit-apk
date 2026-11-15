@@ -53,6 +53,7 @@ import com.doit.app.ui.theme.FlowSkin
 import com.doit.app.ui.theme.Priority
 import com.doit.app.ui.theme.Doit
 import com.doit.app.ui.theme.checkFill
+import com.doit.app.ui.theme.fillFor
 import com.doit.app.ui.theme.labelOn
 import com.doit.app.ui.theme.numeric
 import com.doit.app.ui.theme.readableOn
@@ -384,15 +385,16 @@ fun RowScopeAction(
                 Modifier
                     .size(ActionMetrics.Circle)
                     .clip(CircleShape)
-                    .background(color),
+                    // 所有动作图标统一白色：亮黄 / 橘黄 / 金这类浅底直接压白图标只有 ~2:1，
+                    // 所以圆底按 fillFor 等比压深到白字够读（色相饱和度不变，仍是黄 / 橘黄）。
+                    // 与胶囊、勾选圆的实心底同一套规则，深浅主题都成立。
+                    .background(fillFor(color)),
                 contentAlignment = Alignment.Center,
             ) {
                 DoitIcon(
                     kind = icon,
                     size = ActionMetrics.IconSize,
-                    // 浅实底（黄 / 橘黄 / 金）上白图标只有 ~2:1，改用深墨；
-                    // 深紫 / 蓝 / 红仍是白图标。和胶囊、勾选圆的取色规则同一套。
-                    tint = readableOn(color),
+                    tint = Doit.OnAction,
                     stroke = 1.9.dp,
                 )
             }
