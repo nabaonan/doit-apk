@@ -114,11 +114,12 @@ fun DoitTextField(
     )
 }
 
-private val ActionShape = RoundedCornerShape(13.dp)
+/** 弹框内所有按钮统一用胶囊形，和设置页的 PillButton、顶部分类胶囊同一套语言。 */
+private val ActionShape = RoundedCornerShape(999.dp)
 
 /**
- * 弹窗里的主行动按钮：整行高度 48dp，横向由 [SheetActions] 平分，
- * 手指不用瞄着一个小胶囊点，盲按也基本能中。
+ * 弹窗里的行动按钮：整行高度 48dp，横向由 [SheetActions] 平分，胶囊形，
+ * 手指不用瞄着一个小按钮点，盲按也基本能中。
  */
 @Composable
 private fun SheetActionButton(
@@ -791,9 +792,10 @@ private fun ConfirmCategoryBody(name: String, count: Int, onConfirm: () -> Unit,
 }
 
 /**
- * 弹框底部统一的「取消 / 保存」操作条：左右各占一半、中间留间距，
- * 保存为实色主题色（AccentFill），取消为描边次按钮。与确认弹框的 [SheetActions]
- * 同一套尺寸（48dp 高、圆角矩形），手指不用瞄着小胶囊点。
+ * 弹框底部统一的「取消 / 保存」操作条：左右各占一半、中间留间距，都是胶囊形。
+ * 保存恒为实色主题色（AccentFill + OnAccent），内容没填好也不退回中性灰；
+ * 这样「添加待办 / 拆成几步 / 管理分类」和设置页「保存并同步」是同一套语言。
+ * 与确认弹框的 [SheetActions] 同一套尺寸（48dp 高），手指不用瞄着小按钮点。
  */
 @Composable
 private fun CancelSaveBar(
@@ -829,14 +831,14 @@ private fun CancelSaveBar(
                 .weight(1f)
                 .height(48.dp)
                 .clip(ActionShape)
-                .background(if (saveEnabled) Doit.AccentFill else Doit.Line)
+                .background(Doit.AccentFill)
                 .tapFeedback(enabled = saveEnabled) { onSave() },
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 saveLabel,
                 fontSize = 13.sp,
-                color = if (saveEnabled) Doit.OnAccent else Doit.InkFaint,
+                color = Doit.OnAccent,
                 letterSpacing = 0.5.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,

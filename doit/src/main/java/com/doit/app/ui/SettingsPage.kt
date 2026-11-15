@@ -454,20 +454,21 @@ private fun PillButton(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(999.dp)
-    // 不可点时两套按钮都退回「灰底灰字」，不靠透明度糊过去
+    // 主按钮恒为实色主题色，表单没填好也不退回浅灰绿；和弹框底部「保存」的
+    // 胶囊主按钮、顶部选中的分类胶囊同一套语言。次按钮仍用描边/浅底。
     val bg = when {
-        !enabled -> Doit.Surface2
         primary -> Doit.AccentFill
+        !enabled -> Doit.Surface2
         else -> Color.Transparent
     }
     val fg = when {
-        !enabled -> Doit.InkFaint
         primary -> Doit.OnAccent
+        !enabled -> Doit.InkFaint
         else -> Doit.InkSoft
     }
     val lineColor = when {
-        !enabled -> Doit.LineSoft
         primary -> Doit.AccentFill
+        !enabled -> Doit.LineSoft
         else -> Doit.Line
     }
     Box(
