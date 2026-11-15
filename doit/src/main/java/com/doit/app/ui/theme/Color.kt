@@ -208,12 +208,29 @@ fun chipOn(accent: Color): Color =
  */
 fun checkFill(ring: Color): Color = if (Doit.IsDark) ring else fillFor(ring)
 
-/** 左滑动作区的语义图标色（各动作固定含义，不随主题变） */
+/**
+ * 左滑动作区的语义图标色（各动作固定含义，不随主题变）。
+ *
+ * 一套色相均匀铺开的语义色板：暖侧 45° 黄 → 28° 橘 → 2° 红，冷侧 255° 紫 → 209° 蓝，
+ * 相邻动作色相至少差 17°、明暗接近，一眼能分清谁是谁，也不会有哪个特别跳。
+ * 语义对齐主流任务工具（Todoist / TickTick / Jira / Trello / Linear）的通用习惯：
+ *  - 编辑用黄：修改类动作的温和提示色，不与「危险红」「完成绿」抢含义；
+ *  - 优先级用橘黄：Jira/TickTick 的中高优先级旗标普遍是橙→红→黄的暖色梯度；
+ *  - 分类用紫：标签 / 分类 / 文件夹语义在主流工具里普遍是紫色系（Todoist 标签、
+ *    Trello 与 Linear 的 label、TickTick 的工作类标签），与「优先级」的暖色明确分开；
+ *  - 子任务用蓝：Jira 的子任务图标、Asana/Trello 的「进行中 / 子步骤」都是低饱和蓝；
+ *    绿色在业界和本应用里都留给「完成 / 主题色」，而且绿圆压在侧滑区的深绿底上
+ *    本来就分不清，换成冷蓝后对比度与辨识度都更好；
+ *  - 删除用红、换色用金，沿用原有的破坏性 / 调色语义。
+ *
+ * 亮黄、橘黄、金这类浅实底上的图标由 [readableOn] 自动换成深墨字（白字只有 ~2:1，
+ * 不够读），深紫 / 蓝 / 红仍配白字 —— 与项目里胶囊、实心块的取色规则一致。
+ */
 object ActionColors {
-    val Edit = Color(0xFF6C8CA6)      // 编辑 · 青灰蓝
-    val Priority = Color(0xFF4A9BD8)  // 优先级 · 蓝
-    val Category = Color(0xFF8F86CE)  // 分类 · 紫
-    val Subtask = Color(0xFF2AA98C)   // 子任务 · 绿
+    val Edit = Color(0xFFE6B62C)      // 编辑 · 黄
+    val Priority = Color(0xFFF08C31)  // 优先级 · 橘黄
+    val Category = Color(0xFF8A72D1)  // 分类 · 紫
+    val Subtask = Color(0xFF3E8BD4)   // 子任务 · 蓝
     val Palette = Color(0xFFC9A24D)   // 换色 · 金
     val Delete = Color(0xFFDE6B66)    // 删除 · 红
 }

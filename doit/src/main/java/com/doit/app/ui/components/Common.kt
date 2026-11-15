@@ -390,7 +390,9 @@ fun RowScopeAction(
                 DoitIcon(
                     kind = icon,
                     size = ActionMetrics.IconSize,
-                    tint = Doit.OnAction,
+                    // 浅实底（黄 / 橘黄 / 金）上白图标只有 ~2:1，改用深墨；
+                    // 深紫 / 蓝 / 红仍是白图标。和胶囊、勾选圆的取色规则同一套。
+                    tint = readableOn(color),
                     stroke = 1.9.dp,
                 )
             }
