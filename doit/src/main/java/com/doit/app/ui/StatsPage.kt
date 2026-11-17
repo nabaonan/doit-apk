@@ -65,6 +65,7 @@ import com.doit.app.ui.theme.HeatColors
 import com.doit.app.ui.theme.Doit
 import com.doit.app.ui.theme.numeric
 import com.doit.app.ui.theme.titleStyle
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.atan2
@@ -75,10 +76,39 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-private enum class StatRange(val label: String, val days: Int) {
-    WEEK("近一周", 7),
-    MONTH("近一月", 30),
-    YEAR("近一年", 365),
+internal enum class StatRange(val label: String) {
+    WEEK("本周"),
+    MONTH("本月"),
+    YEAR("近一年"),
+}
+
+/**
+ * 周 / 月范围统一按「当前所在的自然周期」取数，不再用过去 N 天的滚动窗口：
+ *  - 周 = 本周一 ~ 周日（7 格），今天落在某一格上，周未来的日子置灰；
+ *  - 月 = 本月 1 号 ~ 月末（按真实天数 28~31），日历网格按周对齐，未来置灰；
+ *  - 年仍是回溯 365 天，保持原样。
+ *
+ * 三张图（热力 / 环形 / 折线）共用这一对起止日期，保证同页口径一致；
+ * 纯函数、不依赖 Compose，便于单测覆盖跨月 / 跨年边界。
+ */
+internal fun rangeStartEnd(range: StatRange, today: LocalDate): Pair<LocalDate, LocalDate> = when (range) {
+    StatRange.WEEK -> {
+        val monday = today.with(DayOfWeek.MONDAY)
+        monday to monday.plusDays(6)
+    }
+    StatRange.MONTH -> {
+        val first = today.withDayOfMonth(1)
+        first to first.withDayOfMonth(first.lengthOfMonth())
+    }
+    StatRange.YEAR -> (today.minusDays(364)) to today
+}
+
+/** 当前范围内「已经发生」的日期：截止今天，未来的日子不计入环形图 / 折线图数据 */
+private fun StatRange.datesUntilToday(today: LocalDate): List<LocalDate> {
+    val (start, end) = rangeStartEnd(this, today)
+    val last = minOf(end, today)
+    val count = ChronoUnit.DAYS.between(start, last).toInt() + 1
+    return (0 until count).map { start.plusDays(it.toLong()) }
 }
 
 @Composable
@@ -136,8 +166,8 @@ fun StatsPage(state: UiState, onBack: () -> Unit, modifier: Modifier = Modifier)
             StatSection(
                 title = "热力图",
                 caption = when (range) {
-                    StatRange.WEEK -> "近 7 天 · 一格一天，颜色越深完成越多"
-                    StatRange.MONTH -> "近 30 天 · 一格一天，颜色越深完成越多"
+                    StatRange.WEEK -> "本周一至周日 · 一格一天，颜色越深完成越多"
+                    StatRange.MONTH -> "${today.monthValue} 月 1 日至月末 · 一格一天，颜色越深完成越多"
                     StatRange.YEAR -> "近一年 · 一格一天，颜色越深完成越多"
                 },
             ) {
@@ -163,20 +193,20 @@ fun StatsPage(state: UiState, onBack: () -> Unit, modifier: Modifier = Modifier)
             StatSection(
                 title = "环形图",
                 caption = when (range) {
-                    StatRange.WEEK -> "按分类 · 近 7 天完成占比"
-                    StatRange.MONTH -> "按分类 · 近 30 天完成占比"
+                    StatRange.WEEK -> "按分类 · 本周完成占比"
+                    StatRange.MONTH -> "按分类 · ${today.monthValue} 月完成占比"
                     StatRange.YEAR -> "按分类 · 近一年完成占比"
                 },
             ) {
-                DonutChart(categories = categories, logs = state.logs, days = range.days)
+                DonutChart(categories = categories, logs = state.logs, range = range, today = today)
             }
 
             // ---------- 折线图 ----------
             StatSection(
                 title = "折线图",
                 caption = when (range) {
-                    StatRange.WEEK -> "近 7 天 · 每天完成数"
-                    StatRange.MONTH -> "近 30 天 · 每天完成数"
+                    StatRange.WEEK -> "本周 · 每天完成数"
+                    StatRange.MONTH -> "${today.monthValue} 月 · 每天完成数"
                     StatRange.YEAR -> "按月 · 近一年每月完成数"
                 },
                 last = true,
@@ -375,41 +405,46 @@ private fun HeatLegend(modifier: Modifier = Modifier) {
 private fun HeatWeek(counts: Map<LocalDate, Int>, today: LocalDate) {
     var selected by remember { mutableStateOf<LocalDate?>(null) }
     val gap = 4.dp
+    val (monday, _) = rangeStartEnd(StatRange.WEEK, today)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val cellW = ((maxWidth - gap * 6f).value / 7f).dp
         Box {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                (6 downTo 0).forEach { offset ->
-                    val date = today.minusDays(offset.toLong())
-                    val sel = selected == date
+                (0..6).forEach { col ->
+                    val date = monday.plusDays(col.toLong())
+                    val arrived = date <= today
+                    val sel = arrived && selected == date
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(HeatColors[heatLevel(counts[date] ?: 0)])
+                                .background(
+                                    if (arrived) HeatColors[heatLevel(counts[date] ?: 0)]
+                                    else Color.Transparent
+                                )
                                 .then(
                                     if (sel) Modifier.border(1.6.dp, Doit.AccentInk, RoundedCornerShape(8.dp))
                                     else Modifier
                                 )
-                                .tapFeedback { selected = if (sel) null else date },
+                                .tapFeedback(enabled = arrived) { selected = if (sel) null else date },
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            if (offset == 0) "今天" else "${date.monthValue}/${date.dayOfMonth}",
+                            when {
+                                date == today -> "今天"
+                                else -> "${date.monthValue}/${date.dayOfMonth}"
+                            },
                             fontSize = 8.5.sp,
-                            color = if (sel) Doit.Ink else Doit.InkFaint,
+                            color = if (sel) Doit.Ink else if (arrived) Doit.InkFaint else Doit.InkFaint.copy(alpha = 0.4f),
                             fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
                 }
             }
             selected?.let { d ->
-                // 列的顺序是「6 天前 → 今天」从左到右，所以列号 = 6 - 距今天数。
-                // 之前直接用距今天数当列号，锚点被镜像到左边（点今天，气泡却挂在 6 天前上方）。
-                val ago = ChronoUnit.DAYS.between(d, today).toInt() // 0 = 今天
-                val col = 6 - ago
+                val col = ChronoUnit.DAYS.between(monday, d).toInt() // 周一 = 0
                 val x = (cellW + gap) * col.toFloat() + cellW / 2f
                 TipBubble(
                     text = tipText(d, counts[d] ?: 0),
@@ -424,15 +459,15 @@ private fun HeatWeek(counts: Map<LocalDate, Int>, today: LocalDate) {
 @Composable
 private fun HeatMonth(counts: Map<LocalDate, Int>, today: LocalDate) {
     var selected by remember { mutableStateOf<LocalDate?>(null) }
-    val days = 30
-    val start = today.minusDays(days - 1L)
+    // 本月 1 号 ~ 月末：天数取真实月长（28~31），不再固定 30 天
+    val (start, end) = rangeStartEnd(StatRange.MONTH, today)
+    val days = ChronoUnit.DAYS.between(start, end).toInt() + 1
     val startDow = start.dayOfWeek.value - 1 // 周一 = 0
     val rows = ceil((startDow + days) / 7.0).toInt()
     val gap = 4.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val cellW = ((maxWidth - gap * 6f).value / 7f).dp
         val rowPitch = cellW + 4.dp
-        val maxX = maxWidth - 52.dp
         Box {
             Column {
                 repeat(rows) { r ->
@@ -440,19 +475,26 @@ private fun HeatMonth(counts: Map<LocalDate, Int>, today: LocalDate) {
                         repeat(7) { c ->
                             val index = r * 7 + c - startDow
                             val date = start.plusDays(index.toLong())
-                            val inRange = index in 0 until days
-                            val sel = inRange && selected == date
+                            val inMonth = index in 0 until days
+                            val arrived = inMonth && date <= today
+                            val sel = arrived && selected == date
                             Box(
                                 Modifier
                                     .weight(1f)
                                     .aspectRatio(1f)
                                     .clip(RoundedCornerShape(9.dp))
-                                    .background(if (inRange) HeatColors[heatLevel(counts[date] ?: 0)] else Color.Transparent)
+                                    .background(
+                                        when {
+                                            arrived -> HeatColors[heatLevel(counts[date] ?: 0)]
+                                            inMonth -> HeatColors[0].copy(alpha = 0.35f) // 本月还没到的日子：浅浅占位
+                                            else -> Color.Transparent // 上月 / 下月的补位格
+                                        }
+                                    )
                                     .then(
                                         if (sel) Modifier.border(1.6.dp, Doit.AccentInk, RoundedCornerShape(9.dp))
                                         else Modifier
                                     )
-                                    .tapFeedback(enabled = inRange) {
+                                    .tapFeedback(enabled = arrived) {
                                         selected = if (sel) null else date
                                     },
                             )
@@ -615,10 +657,18 @@ internal fun monthMarks(
 }
 
 @Composable
-private fun DonutChart(categories: List<CategoryUi>, logs: List<CompletionLogEntity>, days: Int) {
-    val since = LocalDate.now().minusDays(days - 1L)
+private fun DonutChart(
+    categories: List<CategoryUi>,
+    logs: List<CompletionLogEntity>,
+    range: StatRange,
+    today: LocalDate,
+) {
+    // 与热力图 / 折线图共用同一周期：本周从周一起、本月从 1 号起，且只算到今天
+    val dates = remember(range, today) { range.datesUntilToday(today) }
+    val since = dates.first()
+    val until = dates.last()
     val grouped = logs
-        .filter { millisToDate(it.completedAt) >= since }
+        .filter { millisToDate(it.completedAt) in since..until }
         .groupingBy { it.category }
         .eachCount()
     val data = categories.map { CategoryUi(it.name, it.color, grouped[it.name] ?: 0) }
@@ -738,16 +788,21 @@ private fun LineChart(counts: Map<LocalDate, Int>, today: LocalDate, range: Stat
     val labels: List<String>
     when (range) {
         StatRange.WEEK -> {
-            values = (6 downTo 0).map { counts[today.minusDays(it.toLong())] ?: 0 }
-            labels = (6 downTo 0).map { if (it == 0) "今天" else today.minusDays(it.toLong()).dayOfMonth.toString() }
+            // 本周一 ~ 今天（未来的日子不画，避免折线拖到 0）
+            val dates = range.datesUntilToday(today)
+            values = dates.map { counts[it] ?: 0 }
+            labels = dates.map { if (it == today) "今天" else "${it.dayOfMonth}日" }
         }
 
         StatRange.MONTH -> {
-            values = (29 downTo 0).map { counts[today.minusDays(it.toLong())] ?: 0 }
-            labels = (29 downTo 0).map { offset ->
+            // 本月 1 号 ~ 今天，按真实天数，不再固定 30 个点
+            val dates = range.datesUntilToday(today)
+            values = dates.map { counts[it] ?: 0 }
+            labels = dates.mapIndexed { i, d ->
                 when {
-                    offset == 0 -> "今天"
-                    offset % 5 == 4 -> today.minusDays(offset.toLong()).dayOfMonth.toString()
+                    d == today -> "今天"
+                    i == 0 -> "1日"
+                    i % 5 == 0 -> "${d.dayOfMonth}日"
                     else -> ""
                 }
             }
@@ -763,14 +818,10 @@ private fun LineChart(counts: Map<LocalDate, Int>, today: LocalDate, range: Stat
     val lineColor = Doit.AccentInk
     var selected by remember(range, values) { mutableStateOf<Int?>(null) }
 
-    // 气泡文案：周/月用「M月d日」，年用「N月」
+    // 气泡文案：周/月用「M月d日」，年用「N月」；日期与 values 严格一一对应
     val tipLabels: List<String> = when (range) {
-        StatRange.WEEK -> (6 downTo 0).map { off ->
-            if (off == 0) "今天" else today.minusDays(off.toLong()).let { "${it.monthValue}月${it.dayOfMonth}日" }
-        }
-
-        StatRange.MONTH -> (29 downTo 0).map { off ->
-            today.minusDays(off.toLong()).let { "${it.monthValue}月${it.dayOfMonth}日" }
+        StatRange.WEEK, StatRange.MONTH -> range.datesUntilToday(today).map { d ->
+            if (d == today) "今天" else "${d.monthValue}月${d.dayOfMonth}日"
         }
 
         StatRange.YEAR -> labels
