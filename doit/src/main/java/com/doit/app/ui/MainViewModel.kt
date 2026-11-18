@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.doit.app.BuildConfig
 import com.doit.app.data.AppSettings
+import com.doit.app.data.CategoryEntity
 import com.doit.app.data.CompletionLogEntity
 import com.doit.app.data.SettingsRepository
 import com.doit.app.data.TaskNode
@@ -13,7 +14,9 @@ import com.doit.app.data.TaskRepository
 import com.doit.app.data.TaskEntity
 import com.doit.app.data.buildTree
 import com.doit.app.sync.DavUrl
+import com.doit.app.sync.SnapshotCodec
 import com.doit.app.sync.SyncEngine
+import com.doit.app.sync.SyncMerge
 import com.doit.app.sync.WebDavClient
 import com.doit.app.update.UpdateChecker
 import com.doit.app.ui.theme.FlowSkin
@@ -47,6 +50,14 @@ sealed interface Sheet {
 
 data class CategoryUi(val name: String, val color: Color, val count: Int)
 
+/** 同步一致性计算需要含墓碑的完整快照，与列表展示用的活数据分开观察 */
+private data class SyncBundle(
+    val logs: List<CompletionLogEntity>,
+    val doneTasks: List<TaskEntity>,
+    val allTasks: List<TaskEntity>,
+    val allCategories: List<CategoryEntity>,
+)
+
 data class UiState(
     val nodes: List<TaskNode> = emptyList(),
     val allNodes: List<TaskNode> = emptyList(),
@@ -63,6 +74,8 @@ data class UiState(
     val doneTasks: List<TaskEntity> = emptyList(),
     val skin: FlowSkin = FlowSkin.GREEN,
     val settings: AppSettings = AppSettings(),
+    /** 本地快照与上次成功同步的 base 是否内容一致；true=绿勾云，false=本地有未同步改动 */
+    val cloudConsistent: Boolean = true,
     val loading: Boolean = true,
 ) {
     val remaining: Int get() = (total - done).coerceAtLeast(0)
@@ -99,9 +112,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.categories,
         settingsRepo.settings,
         _filter,
-        combine(repo.logs, repo.doneTasks) { logs, doneTasks -> logs to doneTasks },
-    ) { tasks, categories, settings, filter, logsAndDone ->
-        val (logs, doneTasks) = logsAndDone
+        combine(repo.logs, repo.doneTasks, repo.allTasksSync, repo.allCategoriesSync) { l, d, at, ac ->
+            SyncBundle(l, d, at, ac)
+        },
+    ) { tasks, categories, settings, filter, bundle ->
+        val (logs, doneTasks, allTasksSync, allCategoriesSync) = bundle
         val tree = buildTree(tasks)
         // 今日待办：只按最顶级的完成状态过滤——未整体完成照常展示（子任务全部保留），
         // 整体完成且完成日期不是今天的顶级任务才从首页移除（历史完成记录进月视图）。
@@ -129,9 +144,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             doneTasks = doneTasks,
             skin = FlowSkin.from(settings.skin),
             settings = settings,
+            cloudConsistent = cloudConsistent(allTasksSync, allCategoriesSync, settings),
             loading = false,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
+
+    /** 本地当前快照（含墓碑）与上次成功同步的 base 做内容指纹对比：一致=绿勾云，否则需要再同步 */
+    private fun cloudConsistent(
+        allTasks: List<TaskEntity>,
+        allCategories: List<CategoryEntity>,
+        settings: AppSettings,
+    ): Boolean {
+        val baseJson = settings.syncBase
+        // 还没同步出 base（从未成功同步过）→ 视为不一致，提示用户本地有东西待同步
+        val base = if (baseJson.isBlank()) null else SnapshotCodec.decode(baseJson)
+        if (base == null) return false
+        // base 是 encode 落盘的，本地也走一遍 encode→decode，让两端进同一条规范化路径，
+        // 否则 decode 的「timeLabel 空串 → 刚刚」等归一化会让偶然的空字段造成误判不一致。
+        val localRaw = SnapshotCodec.fromEntities(allTasks, allCategories)
+        val local = SnapshotCodec.decode(SnapshotCodec.encode(SyncMerge.canonical(localRaw))) ?: return false
+        return SyncMerge.fingerprint(local) == SyncMerge.fingerprint(base)
+    }
 
     init {
         viewModelScope.launch {

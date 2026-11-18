@@ -287,7 +287,10 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () ->
                 settings.davUser.isNotBlank() &&
                 settings.davPass.isNotBlank()
             if (cloudReady) {
-                CloudSyncButton(onClick = onSync)
+                CloudSyncButton(
+                    consistent = state.cloudConsistent,
+                    onClick = onSync,
+                )
                 Spacer(Modifier.width(8.dp))
             }
             // 右上角进度恒按「今日全部任务」统计：已完成 + 未完成都计入分母，分子是今日完成的，
@@ -325,9 +328,13 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () ->
     }
 }
 
-/** 今日进度左侧的云同步按钮：浅底描边圆钮 + 主题色图标，尺寸与进度环同一视觉重量。 */
+/**
+ * 今日进度左侧的云同步按钮：浅底描边圆钮 + 主题色图标，尺寸与进度环同一视觉重量。
+ * [consistent] = 本地与远程是否一致：一致画「绿勾云」（确认已同步），
+ * 不一致画「双向箭头云」并用警示色，一眼能看出还有改动没推上去。
+ */
 @Composable
-private fun CloudSyncButton(onClick: () -> Unit) {
+private fun CloudSyncButton(consistent: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(999.dp)
     Box(
         modifier = Modifier
@@ -338,6 +345,10 @@ private fun CloudSyncButton(onClick: () -> Unit) {
             .tapFeedback { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        DoitIcon(DoitIconKind.CloudSync, size = 18.dp, tint = Doit.AccentInk)
+        DoitIcon(
+            kind = if (consistent) DoitIconKind.CloudSyncOk else DoitIconKind.CloudSync,
+            size = 18.dp,
+            tint = if (consistent) Doit.AccentInk else Doit.Strike,
+        )
     }
 }

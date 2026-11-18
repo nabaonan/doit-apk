@@ -635,7 +635,7 @@ private fun CategoriesBody(
     if (paletteFor != null) {
         val name = paletteFor!!
         val current = categories.firstOrNull { it.name == name }?.color
-        SheetDesc("给「$name」挑个颜色。")
+        SheetDesc("给「$name」挑个颜色，挑完自动保存并收起。")
         Spacer(Modifier.height(14.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -656,7 +656,8 @@ private fun CategoriesBody(
                             shape = CircleShape,
                         )
                         .tapFeedback {
-                            onColor(name, hex); paletteFor = null
+                            onColor(name, hex)
+                            onDone()
                         },
                 )
             }

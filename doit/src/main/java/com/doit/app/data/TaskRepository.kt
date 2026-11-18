@@ -62,6 +62,9 @@ class TaskRepository(private val db: DoitDatabase) {
 
     val tasks = taskDao.observeAll()
     val categories = categoryDao.observeAll()
+    /** 含墓碑的完整数据：判断「本地与远程是否一致」用（删除也是变更的一部分） */
+    val allTasksSync = taskDao.observeAllIncludingDeleted()
+    val allCategoriesSync = categoryDao.observeAllIncludingDeleted()
     val logs = logDao.observeAll()
     /** 已完成的待办（带完成时间），月视图按完成日期聚合成每日圆点 */
     val doneTasks = taskDao.observeDone()

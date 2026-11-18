@@ -20,6 +20,10 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE deletedAt IS NULL ORDER BY sortOrder ASC, id ASC")
     suspend fun all(): List<TaskEntity>
 
+    /** 含墓碑：判断「本地与远程是否一致」也要看墓碑，删除记录要随快照传给另一台设备 */
+    @Query("SELECT * FROM tasks ORDER BY id ASC")
+    fun observeAllIncludingDeleted(): Flow<List<TaskEntity>>
+
     /** 含墓碑：只有同步快照需要，删除记录要随快照传给另一台设备 */
     @Query("SELECT * FROM tasks ORDER BY id ASC")
     suspend fun allIncludingDeleted(): List<TaskEntity>
@@ -80,6 +84,9 @@ interface CategoryDao {
 
     @Query("SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY sortOrder ASC, name ASC")
     suspend fun all(): List<CategoryEntity>
+
+    @Query("SELECT * FROM categories ORDER BY name ASC")
+    fun observeAllIncludingDeleted(): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories ORDER BY name ASC")
     suspend fun allIncludingDeleted(): List<CategoryEntity>

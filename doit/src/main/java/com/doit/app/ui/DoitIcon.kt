@@ -23,7 +23,7 @@ import kotlin.math.sin
  * 与视觉稿里的 SVG 图标保持同一套语汇（圆、圆角、细线）。
  */
 enum class DoitIconKind {
-    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar, Pencil, CloudSync,
+    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar, Pencil, CloudSync, CloudSyncOk,
 }
 
 @Composable
@@ -285,6 +285,36 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
             line(13.8f, 11f, 13.8f, 13.9f)
             line(12.5f, 12.6f, 13.8f, 13.9f)
             line(15.1f, 12.6f, 13.8f, 13.9f)
+        }
+
+        DoitIconKind.CloudSyncOk -> {
+            // 云已同步：同一朵云，云前压一支实心对勾，表示「与远程一致」
+            val cloud = Path().apply {
+                moveTo(9.6f * u, 17f * u)
+                quadraticBezierTo(5.3f * u, 17f * u, 5.8f * u, 13.4f * u)
+                quadraticBezierTo(6.1f * u, 10.6f * u, 9f * u, 10.5f * u)
+                quadraticBezierTo(10.1f * u, 6.6f * u, 14.3f * u, 7.4f * u)
+                quadraticBezierTo(17.6f * u, 7.4f * u, 18.3f * u, 10.8f * u)
+                quadraticBezierTo(21.9f * u, 11f * u, 21.4f * u, 14.6f * u)
+                quadraticBezierTo(21.1f * u, 17f * u, 18.6f * u, 17f * u)
+                close()
+            }
+            drawPath(cloud, c, style = stroke)
+            // 对勾：实心画笔去描，比线更醒目
+            val check = Path().apply {
+                moveTo(12.6f * u, 13f * u)
+                lineTo(14.2f * u, 14.8f * u)
+                lineTo(17.3f * u, 11.2f * u)
+            }
+            drawPath(
+                check,
+                c,
+                style = Stroke(
+                    width = 3.4f * u,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                ),
+            )
         }
     }
 }

@@ -329,4 +329,48 @@ class SyncMergeTest {
             .copy(exportedAt = 9999, deviceId = "y", lastSyncAt = 1)
         assertEquals(SyncMerge.fingerprint(a), SyncMerge.fingerprint(b))
     }
+
+    // ------------------------------------------------------------ 本地与远程一致性判定
+
+    /**
+     * 首页云按钮的状态依据：本地当前快照（含墓碑，canonical 后）与 base 指纹一致 → 已同步；
+     * 任何用户改动（增/改/删）都会让本地指纹偏离 base → 需要再同步。
+     */
+
+    @Test
+    fun `本地快照与base一致_指纹相同_判定为已同步`() {
+        val tasks = listOf(
+            task("a", "买菜", category = "生活", updatedAt = 400, createdAt = 100),
+            task("b", "写周报", category = "工作", updatedAt = 300, createdAt = 100),
+        )
+        val categories = listOf(cat("工作", "4A86D6", updatedAt = 200), cat("生活", "4FBF9E", updatedAt = 200))
+        // base 就是「本地快照 canonical 之后」的数据（同步里 canonical 后再 encode 落盘）。
+        // canonical 只清 revision/exportedAt/deviceId/lastSyncAt 元字段、排序归一，不碰任务内容，
+        // 因此 base 与本地（同一批任务+分类）指纹必须一致。
+        val local = SyncSnapshot(revision = 5, tasks = tasks, categories = categories, deviceId = "me", exportedAt = 123)
+        val base = SyncMerge.canonical(local)
+
+        assertEquals(SyncMerge.fingerprint(SyncMerge.canonical(local)), SyncMerge.fingerprint(base))
+    }
+
+    @Test
+    fun `本地改动后指纹偏离base_判定为需要同步`() {
+        val tasks = listOf(task("a", "买菜", category = "生活", updatedAt = 400, createdAt = 100))
+        val categories = listOf(cat("生活", "4FBF9E", updatedAt = 200))
+        val local = SyncSnapshot(revision = 5, tasks = tasks, categories = categories, deviceId = "me")
+        val base = SyncMerge.canonical(local)
+        val baseFp = SyncMerge.fingerprint(base)
+
+        // 用户改标题 → 指纹变
+        val edited = local.copy(tasks = listOf(task("a", "买菜并记账", category = "生活", updatedAt = 500, createdAt = 100)))
+        assertFalse(SyncMerge.fingerprint(SyncMerge.canonical(edited)) == baseFp)
+
+        // 新增一条 → 指纹变
+        val added = local.copy(tasks = tasks + task("c", "新任务", category = "工作", updatedAt = 600, createdAt = 100))
+        assertFalse(SyncMerge.fingerprint(SyncMerge.canonical(added)) == baseFp)
+
+        // 软删一条（墓碑出现）→ 指纹变
+        val deleted = local.copy(tasks = listOf(task("a", "买菜", category = "生活", updatedAt = 700, createdAt = 100, deletedAt = 700)))
+        assertFalse(SyncMerge.fingerprint(SyncMerge.canonical(deleted)) == baseFp)
+    }
 }
