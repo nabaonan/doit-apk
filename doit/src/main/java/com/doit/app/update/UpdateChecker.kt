@@ -2,10 +2,15 @@ package com.doit.app.update
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 
 /**
  * 从 GitHub Releases 拉取最新版并做语义版本比较，替代原来“写死当前就是最新”的本地判断。
@@ -32,36 +37,59 @@ object UpdateChecker {
         val message: String,
     )
 
+    /** 弱网下连接被重置是常见现象，先重试一次再判失败 */
+    private const val RETRY_ON_NETWORK = 1
+
     suspend fun check(currentVersion: String, token: String?): Result = withContext(Dispatchers.IO) {
-        try {
-            val conn = URL(RELEASES_API).openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 8000
-            conn.readTimeout = 10000
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.setRequestProperty("User-Agent", "Doit/1.0 (Android)")
-            if (!token.isNullOrBlank()) {
-                conn.setRequestProperty("Authorization", "Bearer $token")
+        var lastNetworkError: Exception? = null
+        // 网络类异常（连接被关/超时/无网络）才值得重试；权限、仓库等 HTTP 业务错误无需重试
+        for (attempt in 0..RETRY_ON_NETWORK) {
+            try {
+                val conn = URL(RELEASES_API).openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 15000
+                conn.readTimeout = 20000
+                conn.setRequestProperty("Accept", "application/vnd.github+json")
+                conn.setRequestProperty("User-Agent", "Doit/1.0 (Android)")
+                if (!token.isNullOrBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                }
+                val code = conn.responseCode
+                Log.i(TAG, "GET $RELEASES_API -> $code (attempt ${attempt + 1})")
+                if (code != 200) {
+                    // GitHub 对「token 无权访问的私有仓库」「token 无效」「仓库不存在」都会返回 401/403/404，
+                    // 故意不暴露私有仓库是否存在。因此这里要区分两种情形给不同提示：
+                    // - 没填 token：引导去设置里填
+                    // - 填了 token 仍失败：token 有效但缺该仓库权限，或已过期/被撤销
+                    return@withContext Result(false, message = "检查更新失败（${authHint(code, token)}）")
+                }
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val tag = JSONObject(body).optString("tag_name", "").trim()
+                if (tag.isBlank()) return@withContext Result(false, message = "远程返回异常，稍后再试")
+                val (has, message) = decide(tag, currentVersion)
+                return@withContext Result(has, tag.removePrefix("v"), message = message)
+            } catch (e: SocketTimeoutException) {
+                Log.w(TAG, "检查更新超时 (attempt ${attempt + 1})", e)
+                lastNetworkError = e
+            } catch (e: UnknownHostException) {
+                Log.w(TAG, "无法解析 api.github.com", e)
+                return@withContext Result(false, message = NETWORK_HINT)
+            } catch (e: SocketException) {
+                Log.w(TAG, "连接被中断 (attempt ${attempt + 1})", e)
+                lastNetworkError = e
+            } catch (e: IOException) {
+                Log.w(TAG, "读取响应失败 (attempt ${attempt + 1})", e)
+                lastNetworkError = e
             }
-            val code = conn.responseCode
-            Log.i(TAG, "GET $RELEASES_API -> $code")
-            if (code != 200) {
-                // GitHub 对「token 无权访问的私有仓库」「token 无效」「仓库不存在」都会返回 401/403/404，
-                // 故意不暴露私有仓库是否存在。因此这里要区分两种情形给不同提示：
-                // - 没填 token：引导去设置里填
-                // - 填了 token 仍失败：token 有效但缺该仓库权限，或已过期/被撤销
-                return@withContext Result(false, message = "检查更新失败（${authHint(code, token)}）")
-            }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val tag = JSONObject(body).optString("tag_name", "").trim()
-            if (tag.isBlank()) return@withContext Result(false, message = "远程返回异常，稍后再试")
-            val (has, message) = decide(tag, currentVersion)
-            return@withContext Result(has, tag.removePrefix("v"), message = message)
-        } catch (e: Exception) {
-            Log.w(TAG, "检查更新失败", e)
-            Result(false, message = "检查更新失败：${e.message ?: "网络错误"}")
+            if (attempt < RETRY_ON_NETWORK) delay(RETRY_DELAY_MS)
         }
+        Log.w(TAG, "检查更新多次失败", lastNetworkError)
+        Result(false, message = NETWORK_HINT)
     }
+
+    /** 网络类失败统一提示：点明是"连不上 GitHub"，不是 token 或 App 的问题 */
+    private const val NETWORK_HINT = "检查更新失败：网络不太通畅，连不上 GitHub（api.github.com），请检查网络后重试"
+    private const val RETRY_DELAY_MS = 1200L
 
     /**
      * 纯决策逻辑（可单测）：给定远程 tag（可能带 v 前缀）与本地版本号，
