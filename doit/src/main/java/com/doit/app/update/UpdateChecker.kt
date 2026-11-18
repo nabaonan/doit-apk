@@ -46,12 +46,11 @@ object UpdateChecker {
             val code = conn.responseCode
             Log.i(TAG, "GET $RELEASES_API -> $code")
             if (code != 200) {
-                val hint = when (code) {
-                    401, 403, 404 ->
-                        "私有仓库需在「设置」里填一个 GitHub 只读 Token，之后才能读到 Release"
-                    else -> "HTTP $code"
-                }
-                return@withContext Result(false, message = "检查更新失败（$hint）")
+                // GitHub 对「token 无权访问的私有仓库」「token 无效」「仓库不存在」都会返回 401/403/404，
+                // 故意不暴露私有仓库是否存在。因此这里要区分两种情形给不同提示：
+                // - 没填 token：引导去设置里填
+                // - 填了 token 仍失败：token 有效但缺该仓库权限，或已过期/被撤销
+                return@withContext Result(false, message = "检查更新失败（${authHint(code, token)}）")
             }
             val body = conn.inputStream.bufferedReader().use { it.readText() }
             val tag = JSONObject(body).optString("tag_name", "").trim()
@@ -77,6 +76,21 @@ object UpdateChecker {
         } else {
             false to "已是最新版本 v$local"
         }
+    }
+
+    /**
+     * 认证失败提示：区分「还没填 token」和「填了 token 仍失败」两种场景。
+     * GitHub 对无权访问的私有仓库统一回 401/403/404，所以填了 token 还失败
+     * 几乎都是 token 缺该仓库权限（或已过期），直接点明这一点，别再让用户误以为没存上。
+     */
+    internal fun authHint(code: Int, token: String?): String = when (code) {
+        401, 403, 404 ->
+            if (token.isNullOrBlank()) {
+                "私有仓库需在「设置」里填一个 GitHub 只读 Token，之后才能读到 Release"
+            } else {
+                "已带 Token 仍无法访问：请确认该 Token 已勾选本仓库、且含 Contents 读取权限"
+            }
+        else -> "HTTP $code"
     }
 
     /** 按 x.y.z 数值比较，remote 比 local 新返回正数。 */

@@ -44,4 +44,25 @@ class UpdateCheckerTest {
         assertTrue(msg.contains("1.0.6"))
         assertTrue(UpdateChecker.compareVersions("1.0.7", "1.0.6-debug") > 0)
     }
+
+    @Test
+    fun `没填token且404_提示需要填写只读token`() {
+        val hint = UpdateChecker.authHint(404, null)
+        assertTrue(hint.contains("GitHub 只读 Token"))
+    }
+
+    @Test
+    fun `填了token仍404_应点明权限不足而非再次要求填写`() {
+        val hint = UpdateChecker.authHint(404, "github_pat_xxx")
+        assertFalse(hint.contains("填一个 GitHub 只读 Token"))
+        assertTrue(hint.contains("已带 Token 仍无法访问"))
+        assertTrue(hint.contains("该 Token 已勾选本仓库"))
+        assertTrue(hint.contains("Contents"))
+    }
+
+    @Test
+    fun `非认证错误_透传HTTP码`() {
+        val hint = UpdateChecker.authHint(500, null)
+        assertTrue(hint.contains("HTTP 500"))
+    }
 }
