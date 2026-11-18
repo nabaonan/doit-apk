@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -113,6 +116,7 @@ fun MainScreen(vm: MainViewModel) {
             ListHeader(
                 state = state,
                 onFilter = vm::setFilter,
+                onSync = { vm.syncDav(state.settings.davUrl, state.settings.davUser, state.settings.davPass) },
             )
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -256,7 +260,7 @@ fun MainScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun ListHeader(state: UiState, onFilter: (String) -> Unit) {
+private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () -> Unit) {
     val today = LocalDate.now()
     val kicker = "${today.year}年${today.monthValue}月${today.dayOfMonth}日 星期${WEEKDAYS_CN[today.dayOfWeek.value - 1]}"
 
@@ -273,6 +277,18 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit) {
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("今日", style = displayStyle, modifier = Modifier.weight(1f))
+            // 云同步按钮：只有"真正开启了云同步"才出现——开关打开且服务器三项配置齐全，
+            // 与设置页「保存并同步」的可点击条件一致。全新用户没配过就不会看到点了报错的按钮。
+            // 紧贴进度环左侧，未开启时连占位都不留，右侧布局不跳。
+            val settings = state.settings
+            val cloudReady = settings.davEnabled &&
+                settings.davUrl.isNotBlank() &&
+                settings.davUser.isNotBlank() &&
+                settings.davPass.isNotBlank()
+            if (cloudReady) {
+                CloudSyncButton(onClick = onSync)
+                Spacer(Modifier.width(8.dp))
+            }
             // 右上角进度恒按「今日全部任务」统计：已完成 + 未完成都计入分母，分子是今日完成的，
             // 与当前切到的分类标签解耦；非今日完成的历史/未来项已被 showInToday 排除。
             ProgressRing(done = state.todayDone, total = state.todayTotal)
@@ -305,5 +321,22 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit) {
             modifier = Modifier.padding(bottom = 12.dp),
         )
         Box(Modifier.fillMaxWidth().height(1.dp).background(Doit.Line))
+    }
+}
+
+/** 今日进度左侧的云同步按钮：浅底描边圆钮 + 主题色图标，尺寸与进度环同一视觉重量。 */
+@Composable
+private fun CloudSyncButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(999.dp)
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(shape)
+            .background(Doit.Surface2)
+            .border(1.dp, Doit.Line, shape)
+            .tapFeedback { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        DoitIcon(DoitIconKind.CloudSync, size = 18.dp, tint = Doit.AccentInk)
     }
 }

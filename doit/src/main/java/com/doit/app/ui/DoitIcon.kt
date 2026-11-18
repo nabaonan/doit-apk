@@ -23,7 +23,7 @@ import kotlin.math.sin
  * 与视觉稿里的 SVG 图标保持同一套语汇（圆、圆角、细线）。
  */
 enum class DoitIconKind {
-    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar, Pencil,
+    Plus, Mic, Gear, FolderPlus, Heat, Flag, Folder, Sub, Trash, Palette, Back, Tick, Grid, Close, Chevron, Calendar, Pencil, CloudSync,
 }
 
 @Composable
@@ -262,6 +262,29 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
             line(9.2f, 15.2f, 19.2f, 5.2f) // 笔身右缘（平行）
             line(7f, 17f, 4.2f, 19.8f)   // 笔尖（左下收尖）
             line(17f, 7f, 19.8f, 4.2f)   // 擦头（右上）
+        }
+
+        DoitIconKind.CloudSync -> {
+            // 云同步：圆润云朵轮廓 + 云内一上一下的双向箭头
+            val cloud = Path().apply {
+                moveTo(7.9f * u, 17f * u)
+                quadraticBezierTo(3.6f * u, 17f * u, 4.1f * u, 13.4f * u)
+                quadraticBezierTo(4.4f * u, 10.6f * u, 7.3f * u, 10.5f * u)
+                quadraticBezierTo(8.4f * u, 6.6f * u, 12.6f * u, 7.4f * u)
+                quadraticBezierTo(15.9f * u, 7.4f * u, 16.6f * u, 10.8f * u)
+                quadraticBezierTo(20.2f * u, 11f * u, 19.7f * u, 14.6f * u)
+                quadraticBezierTo(19.4f * u, 17f * u, 16.9f * u, 17f * u)
+                close()
+            }
+            drawPath(cloud, c, style = stroke)
+            // 左箭头向上
+            line(10.2f, 13.9f, 10.2f, 11f)
+            line(8.9f, 12.3f, 10.2f, 11f)
+            line(11.5f, 12.3f, 10.2f, 11f)
+            // 右箭头向下
+            line(13.8f, 11f, 13.8f, 13.9f)
+            line(12.5f, 12.6f, 13.8f, 13.9f)
+            line(15.1f, 12.6f, 13.8f, 13.9f)
         }
     }
 }
