@@ -21,6 +21,9 @@ data class AppSettings(
     val davUrl: String = "",
     val davUser: String = "",
     val davPass: String = "",
+    /** 是否已连通验证通过：测试连接或保存并同步成功即为 true，失败/改开关关闭即重置为 false。
+     *  首页云同步按钮只有在 davVerified 为 true 时才显示。 */
+    val davVerified: Boolean = false,
     /** 给人看的上次同步摘要 */
     val lastSync: String = "还没有同步过",
     /** 机器可读：上一次**成功**同步的时间戳，0 = 从未成功同步过 */
@@ -42,6 +45,7 @@ class SettingsRepository(private val context: Context) {
         val davUrl = stringPreferencesKey("dav_url")
         val davUser = stringPreferencesKey("dav_user")
         val davPass = stringPreferencesKey("dav_pass")
+        val davVerified = booleanPreferencesKey("dav_verified")
         val lastSync = stringPreferencesKey("last_sync")
         val lastSyncAt = longPreferencesKey("last_sync_at")
         val syncBase = stringPreferencesKey("sync_base")
@@ -58,6 +62,7 @@ class SettingsRepository(private val context: Context) {
             davUrl = p[Keys.davUrl] ?: "",
             davUser = p[Keys.davUser] ?: "",
             davPass = p[Keys.davPass] ?: "",
+            davVerified = p[Keys.davVerified] ?: false,
             lastSync = p[Keys.lastSync] ?: "还没有同步过",
             lastSyncAt = p[Keys.lastSyncAt] ?: 0L,
             syncBase = p[Keys.syncBase] ?: "",
@@ -79,6 +84,11 @@ class SettingsRepository(private val context: Context) {
         it[Keys.davUrl] = url
         it[Keys.davUser] = user
         it[Keys.davPass] = pass
+    }
+
+    /** 设置"已连通验证通过"状态：测试连接或保存并同步成功=true，失败=false */
+    suspend fun setDavVerified(verified: Boolean) = context.settingsStore.edit {
+        it[Keys.davVerified] = verified
     }
 
     suspend fun setGithubToken(token: String) = context.settingsStore.edit { it[Keys.githubToken] = token }

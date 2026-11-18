@@ -300,6 +300,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setDavEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepo.setDavEnabled(enabled)
+            if (!enabled) settingsRepo.setDavVerified(false)
             say(if (enabled) "已开启自动同步" else "已关闭自动同步")
         }
     }
@@ -321,12 +322,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // 客户端自动找到可用目录时把它写回配置，设置页的输入框会跟着刷新，
                     // 这样「保存并同步」用的就是已验证过的地址。
                     r.workingUrl?.let { settingsRepo.setDavConfig(it, user, pass) }
+                    settingsRepo.setDavVerified(true)
                     say(
                         if (r.workingUrl != null) "${r.message}，地址已自动修正为 ${r.workingUrl}"
                         else r.message,
                     )
                 },
-                onFailure = { say(it.message ?: "连接失败") },
+                onFailure = {
+                    settingsRepo.setDavVerified(false)
+                    say(it.message ?: "连接失败")
+                },
             )
         }
     }
@@ -337,8 +342,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             settingsRepo.setDavConfig(url, user, pass)
             say("正在同步…")
             syncEngine.synchronize(url, user, pass).fold(
-                onSuccess = { report -> say("配置已保存 · ${report.detail}") },
-                onFailure = { say(it.message ?: "同步失败") },
+                onSuccess = { report ->
+                    settingsRepo.setDavVerified(true)
+                    say("配置已保存 · ${report.detail}")
+                },
+                onFailure = {
+                    settingsRepo.setDavVerified(false)
+                    say(it.message ?: "同步失败")
+                },
             )
         }
     }

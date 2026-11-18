@@ -277,11 +277,12 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () ->
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("今日", style = displayStyle, modifier = Modifier.weight(1f))
-            // 云同步按钮：只有"真正开启了云同步"才出现——开关打开且服务器三项配置齐全，
-            // 与设置页「保存并同步」的可点击条件一致。全新用户没配过就不会看到点了报错的按钮。
-            // 紧贴进度环左侧，未开启时连占位都不留，右侧布局不跳。
+            // 云同步按钮：只有"真正连通并验证通过"才出现——开关打开、服务器三项配置齐全、
+            // 且测试连接/保存并同步成功过（davVerified）。没验证过就不会显示点了报错的按钮。
+            // 紧贴进度环左侧，未显示时连占位都不留，右侧布局不跳。
             val settings = state.settings
             val cloudReady = settings.davEnabled &&
+                settings.davVerified &&
                 settings.davUrl.isNotBlank() &&
                 settings.davUser.isNotBlank() &&
                 settings.davPass.isNotBlank()
