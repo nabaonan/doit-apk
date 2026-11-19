@@ -11,7 +11,7 @@
 - **月视图**：按完成日期聚合成日历，有完成记录的日子打小圆点，选中某天查看当天完成项。
 - **统计页**：热力图（周 / 月 / 年）、环形图、折线图，三段时间范围联动。
 - **WebDAV 双向同步**：在多个设备之间保持一致，双向三方合并，本地改动优先、不丢远程记录。
-- **检查更新**：连接 GitHub Releases 比对最新版本（私有仓库需在设置里填只读 Token）。
+- **检查更新**：连接 GitHub Releases 比对最新版本，发现新版后应用内直接下载 APK（带进度条）并调起安装器。公开仓库无需任何凭据；仓库若为私有，需在设置里填只读 Token。
 
 物料索引：
 
@@ -107,20 +107,25 @@ adb install -r doit/build/outputs/apk/debug/doit-<版本>-debug.apk
 3. `./release.sh` 打 `vX.Y.Z` tag 并推送 → GitHub Actions 自动执行：
    - `build` job：单测 → Lint → `assembleDebug`（上传 artifact）。
    - `release` job（仅 tag 触发）：`assembleRelease` → 以 `doit-<tag>-release.apk` 挂到 GitHub Releases。
-4. 应用内「设置 → 检查更新」即可发现新版本（私有仓库需填写只读 GitHub Token）。
+4. 应用内「设置 → 检查更新」即可发现新版本并直接下载安装（公开仓库免 Token；私有仓库需在设置里填只读 GitHub Token）。
 
 ### 签名
 
-- 所有 release 统一用仓库内 `keystore/doit-release.jks`（alias 与密钥口令均为 `doit`）签名，`doit/build.gradle.kts` 将其设为**首选**；本地与 CI 每个版本同一把证书，保证新版本可覆盖旧版本安装。
-- 生成一把新证书（密钥口令至少 6 位）：
+- 签名材料**不入仓库**（签名密钥属于机密）。来源优先级：
+  1. 本地 `keystore.properties`（项目根 或 `~/.doit-keystore/keystore.properties`，两者都已 gitignore）
+  2. 环境变量 `DOIT_KEYSTORE(_PASSWORD)` / `DOIT_KEY_ALIAS` / `DOIT_KEY_PASSWORD`（CI 的 GitHub Secrets 会注入为同名环境变量）
+- CI 的 `release` job 从仓库 Secrets 恢复密钥：在 **Settings → Secrets and variables → Actions** 添加：
+  - `KEYSTORE_BASE64`（keystore 文件的 base64）
+  - `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`
+- 无密钥时构建会回退用 debug 证书签名并打印警告（仅本地临时出包，不可覆盖升级）。
+- 生成一把新证书：
 
 ```bash
-keytool -genkeypair -v -keystore keystore/doit-release.jks \
+keytool -genkeypair -v -keystore doit-release.jks \
   -alias doit -keyalg RSA -keysize 2048 -validity 36500 \
-  -storepass ***REMOVED*** -keypass ***REMOVED*** -dname "CN=Doit, O=Doit, C=CN"
+  -storepass '换成你自己的强口令' -keypass '同样的强口令' -dname "CN=Doit, O=Doit, C=CN"
+# base64 后放入 GitHub Secret：`base64 -w0 doit-release.jks`
 ```
-
-> 注意：签名证书已入库以换取“升级不报签名不一致”。若仓库将来转公开，务必把它从仓库移除，改用 GitHub Secrets（`KEYSTORE_BASE64` 等）存放同一把密钥。
 
 ---
 
@@ -195,7 +200,8 @@ Doit/
 ### 检查更新
 
 - `update/UpdateChecker.kt` 请求 `api.github.com/repos/nabaonan/doit-apk/releases/latest`，语义版本比较，提示「发现新版本 vX」或「已是最新」。
-- 项目是私有仓库，匿名调用被 GitHub 拒绝（401/403/404）；在「设置 → 关于」填一个只读 GitHub Token（`contents:read` 权限）后即可正常检查。
+- 发现新版后可应用内直接下载（`update/ApkDownloader.kt`，带进度条）并调起系统安装器（FileProvider + `REQUEST_INSTALL_PACKAGES`）。
+- 仓库公开时匿名即可访问、**无需 Token**；仓库若为私有，需在「设置 → 关于」填一个只读 GitHub Token（`contents:read` 权限）。
 
 ---
 
@@ -203,7 +209,10 @@ Doit/
 
 | 版本 / 轮次 | 内容 |
 | --- | --- |
-| v1.0.6 | 检查更新真正联网比对 GitHub Release（新增可选 Token）；release 统一用仓库内密钥签名（修复“升级签名不一致”） |
+| （main） | 安全检查：签名密钥移出仓库，改用 Secrets/本地 keystore.properties 注入；开源后检查更新免 Token |
+| v1.0.12 | 检查更新网络重试、云按钮加大+进度环加深、Token 即时生效 |
+| v1.0.11 | 检查更新提示区分 Token 权限不足 |
+| v1.0.6 | 检查更新真正联网比对 GitHub Release（新增可选 Token） |
 | v1.0.5 | 首页今日待办过滤（只留活跃项 + 今日完成项）；月视图页面 + 已完成待办侧滑删除 |
 | v1.0.4 | 同步后本地改动不再被远程覆盖（本地优先 + 旧副本防护 + base 兜底） |
 | v1.0.3 | WebDAV 双向同步：Room v1→v2 补 uid/updatedAt/deletedAt，并集合并非替换 |
