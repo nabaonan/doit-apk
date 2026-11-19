@@ -13,13 +13,10 @@ local.properties
 # 本地模拟器（AVD 动辄几百 MB）
 .emu/
 
-# 签名材料不入库；例外：keystore/doit-release.jks 入库作为统一正式签名，
-# 保证本地与 CI 每个 release 用同一证书（否则回退 debug 证书会导致“签名不一致”无法覆盖升级）
-keystore/*
-!keystore/doit-release.jks
-*.jks
-*.keystore
-!keystore/doit-release.jks
+# 签名材料一律不入库：开源仓库绝不能带正式签名密钥。
+# 本地用 ~/.doit-keystore/keystore.properties 或环境变量 DOIT_* 提供；CI 用 GitHub Secrets。
+**/*.jks
+**/*.keystore
 keystore.properties
 
 # 构建产物

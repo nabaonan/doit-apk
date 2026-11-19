@@ -163,17 +163,28 @@ jobs:
           # CI 不调用 ./gradlew，没必要再校验 wrapper jar（校验不过会直接失败）
           validate-wrappers: false
 
-      # 统一用仓库内 keystore/doit-release.jks 签名（build.gradle.kts 首选它），
-      # 保证本地与每个 release 都是同一把证书，能覆盖旧版本安装。
-      # 之前把 keystore 排除在仓库外、CI 回退到每次运行都不同的 debug 证书，
-      # 导致「签名不一致」无法升级——现在不再需要（也忽略）KEYSTORE_BASE64 等 secret。
-      - name: 确认签名证书
+      # 签名密钥存放在 GitHub Repository Secrets（KEYSTORE_BASE64 / KEYSTORE_PASSWORD /
+      # KEY_ALIAS / KEY_PASSWORD），仓库内不再放任何 jks。这里把它还原成文件并设为环境变量，
+      # build.gradle.kts 从环境变量读取，保证本地与 release 用同一把证书，能覆盖旧版本安装。
+      - name: 从 Secrets 还原签名证书
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ ! -f keystore/doit-release.jks ]; then
-            echo "::error::缺少 keystore/doit-release.jks，release 无法统一签名"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::未配置签名 Secret（KEYSTORE_BASE64）。请在仓库 Settings → Secrets and variables → Actions 中添加后重跑 release。"
             exit 1
           fi
-          echo "::notice::将用 keystore/doit-release.jks 统一签名（可覆盖旧版本安装）"
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/doit-release.jks
+          chmod 400 keystore/doit-release.jks
+          echo "DOIT_KEYSTORE=$GITHUB_WORKSPACE/keystore/doit-release.jks" >> "$GITHUB_ENV"
+          echo "DOIT_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "DOIT_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "DOIT_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "::notice::已从 Secrets 还原签名证书（可覆盖旧版本安装）"
 
       - name: 构建 Release APK
         run: gradle --no-daemon assembleRelease 2>&1 | tee -a ci-build.log

@@ -7,16 +7,29 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// 本地签名配置：**仓库内的 keystore/doit-release.jks 是唯一正式签名**，
-// 本地、CI、后续每个 release 都用同一把证书，保证新版本能覆盖旧版本安装
-// （之前 CI 回退到每次运行都不同的 debug 证书，导致“签名不一致”无法升级）。
+// 签名配置：**签名材料不入库**（开源仓库绝不能带正式密钥）。
+// 来源优先级：
+//   1) keystore.properties（本地 ~/.doit-keystore/keystore.properties 或项目根，不入 git）
+//   2) 环境变量 DOIT_KEYSTORE / DOIT_KEYSTORE_PASSWORD / DOIT_KEY_ALIAS / DOIT_KEY_PASSWORD
+//   3) CI 的 GitHub Secrets 会以同名环境变量注入
+// 都没有时回退 debug 签名（仅本地/CI 临时出包，正式 release 必须提供密钥）。
 val keystoreProps = Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
+    // 项目根 or 用户目录的受保护位置（都不入 git）
+    val candidates = listOf(
+        rootProject.file("keystore.properties"),
+        rootProject.file("${System.getProperty("user.home")}/.doit-keystore/keystore.properties"),
+    )
+    for (f in candidates) {
+        if (f.exists()) {
+            f.inputStream().use { load(it) }
+            break
+        }
+    }
 }
-val releaseStorePath: String? = rootProject.file("keystore/doit-release.jks").takeIf { it.exists() }?.absolutePath
-    ?: System.getenv("DOIT_KEYSTORE")
-    ?: keystoreProps.getProperty("storeFile")?.let { rootProject.file(it).absolutePath }
+val env = System.getenv()
+val releaseStorePath: String? =
+    env["DOIT_KEYSTORE"]?.takeIf { it.isNotBlank() }
+        ?: keystoreProps.getProperty("storeFile")?.takeIf { it.isNotBlank() }?.let { rootProject.file(it).absolutePath }
 
 // ---- 版本号：完全由 git tag 推导，不再手改 ----
 // 打 v1.2.3 这个 tag，出来的就是 versionName=1.2.3、versionCode=10203；
@@ -66,13 +79,19 @@ android {
         if (releaseStorePath != null) {
             create("release") {
                 storeFile = file(releaseStorePath)
-                storePassword = System.getenv("DOIT_KEYSTORE_PASSWORD")
-                    ?: keystoreProps.getProperty("storePassword") ?: "***REMOVED***"
-                keyAlias = System.getenv("DOIT_KEY_ALIAS")
-                    ?: keystoreProps.getProperty("keyAlias") ?: "doit"
-                keyPassword = System.getenv("DOIT_KEY_PASSWORD")
-                    ?: keystoreProps.getProperty("keyPassword") ?: "***REMOVED***"
+                // 口令只认 keystore.properties / 环境变量，绝不写死默认值
+                storePassword = env["DOIT_KEYSTORE_PASSWORD"]
+                    ?: keystoreProps.getProperty("storePassword")
+                    ?: error("缺少签名口令：请在 keystore.properties 提供 storePassword 或设 DOIT_KEYSTORE_PASSWORD")
+                keyAlias = env["DOIT_KEY_ALIAS"]
+                    ?: keystoreProps.getProperty("keyAlias")
+                    ?: error("缺少签名别名：请在 keystore.properties 提供 keyAlias 或设 DOIT_KEY_ALIAS")
+                keyPassword = env["DOIT_KEY_PASSWORD"]
+                    ?: keystoreProps.getProperty("keyPassword")
+                    ?: error("缺少密钥口令：请在 keystore.properties 提供 keyPassword 或设 DOIT_KEY_PASSWORD")
             }
+        } else {
+            logger.warn("⚠ 未找到 release 签名密钥，正式包将使用 debug 证书签名（仅临时出包，不可升级安装）")
         }
     }
 
