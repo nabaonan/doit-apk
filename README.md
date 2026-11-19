@@ -4,20 +4,22 @@
 
 主要能力：
 
-- **首页「今日待办」**：只展示未被整体完成、以及今天刚完成的顶级任务；整体完成且完成日期不是今天的自动归档进月视图。
+- **首页「今日待办」**：只展示未被整体完成、以及今天刚完成的顶级任务；整体完成且完成日期不是今天的自动归档进月视图；右上角进度环显示今日完成度。
 - **右滑完成**：进度从卡片左端跟手生长，滑到 55% 松开即完成，勾选圈同步描出对勾。
 - **左滑操作**：露出 优先级 / 分类 / 子任务 / 删除；已完成的任务左滑只露出 删除。
 - **子任务无限下拆**：子任务全做完，父任务自动整体完成（逐级向上冒泡）。
+- **编辑规则分级**：父任务编辑可改标题与分类、子任务只改标题与优先级、已完成任务不提供编辑；单条左滑换颜色 / 删除，分类可随时增删改色。
+- **分类管理**：自定义分类胶囊 + 颜色，删除分类不影响待办（仅变回未分类）。
+- **云同步按钮**：开启 WebDAV 并连通后显示在顶部，与远程一致显示绿勾云、有未同步改动显示警示云（橙箭头），点击即手动同步。
 - **月视图**：按完成日期聚合成日历，有完成记录的日子打小圆点，选中某天查看当天完成项。
 - **统计页**：热力图（周 / 月 / 年）、环形图、折线图，三段时间范围联动。
 - **WebDAV 双向同步**：在多个设备之间保持一致，双向三方合并，本地改动优先、不丢远程记录。
-- **检查更新**：连接 GitHub Releases 比对最新版本，发现新版后应用内直接下载 APK（带进度条）并调起安装器。公开仓库无需任何凭据；仓库若为私有，需在设置里填只读 Token。
+- **检查更新**：连接 GitHub Releases 比对最新版本，发现新版后应用内直接下载 APK（带进度条）并自动调起安装器。公开仓库无需任何凭据。
 
 物料索引：
 
 - 源码仓库：<https://github.com/nabaonan/doit-apk>（只有打 `v*` tag 才触发 CI 构建）
-- 交互原型：`design/prototype/index.html`
-- 设计稿：`design/doit-APP设计稿.png`
+- 功能截图：`screenshots/`（各页面亮 / 暗主题对比）
 
 ---
 
@@ -64,7 +66,7 @@
 # 构建调试包（模拟器 / 真机调试用）
 ./gradlew assembleDebug
 
-# 构建正式包（自动用仓库内 keystore/doit-release.jks 签名）
+# 构建正式包（用 keystore.properties / 环境变量里的签名密钥；无密钥则回退 debug 签名并警告）
 ./gradlew assembleRelease
 
 # 装到已连接的设备
@@ -107,7 +109,7 @@ adb install -r doit/build/outputs/apk/debug/doit-<版本>-debug.apk
 3. `./release.sh` 打 `vX.Y.Z` tag 并推送 → GitHub Actions 自动执行：
    - `build` job：单测 → Lint → `assembleDebug`（上传 artifact）。
    - `release` job（仅 tag 触发）：`assembleRelease` → 以 `doit-<tag>-release.apk` 挂到 GitHub Releases。
-4. 应用内「设置 → 检查更新」即可发现新版本并直接下载安装（公开仓库免 Token；私有仓库需在设置里填只读 GitHub Token）。
+4. 应用内「设置 → 检查更新」即可发现新版本并直接下载安装（公开仓库匿名即可，无需任何凭据）。
 
 ### 签名
 
@@ -135,7 +137,7 @@ keytool -genkeypair -v -keystore doit-release.jks \
 - Room 2.6.1（KSP）本地持久化，离线优先；DataStore Preferences 存设置
 - 手势：`pointerInput + awaitEachGesture` 自绘双向滑动，未用第三方库
 - WebDAV：`HttpURLConnection`（探针 PUT 探活 / GET 下载 / PUT 备份 / DELETE 清理），快照编解码用系统 `org.json`
-- 更新检查：`HttpURLConnection` 拉取 GitHub Releases API + 语义版本比较（`update/UpdateChecker.kt`）
+- 更新检查与应用内更新：`HttpURLConnection` 拉取 GitHub Releases API + 语义版本比较（`update/UpdateChecker.kt`），流式下载 APK（`update/ApkDownloader.kt`，带进度），FileProvider 调起安装器
 - 单元测试：纯 JVM 测试（JUnit4），覆盖任务树 / 统计序列 / 地址校验 / 同步合并 / 更新检查
 
 ---
@@ -154,20 +156,22 @@ Doit/
 │   │   ├── SnapshotCodec.kt      #   v2 编解码，兼容 v1 旧备份
 │   │   ├── SyncEngine.kt         #   同步编排与状态落盘
 │   │   └── DavUrl.kt             #   地址格式校验
-│   ├── update/                   # UpdateChecker.kt：GitHub Releases 更新检查
+│   ├── update/                   # 更新检查与应用内下载安装
+│   │   ├── UpdateChecker.kt      #   GitHub Releases 检查（语义版本比较）
+│   │   └── ApkDownloader.kt      #   流式下载 APK（带进度回调）
 │   └── ui/
 │       ├── MainScreen.kt         # 今日清单 + 页面切换 + 提示条
-│       ├── MainViewModel.kt      # UiState / 面板 / 动作
+│       ├── MainViewModel.kt      # UiState / 面板 / 动作 / 应用内更新状态
 │       ├── StatsPage.kt          # 热力图 / 环形图 / 折线图
 │       ├── CalendarPage.kt       # 月视图（按完成日期聚合）
-│       ├── SettingsPage.kt       # 外观 / 同步 / 关于
+│       ├── SettingsPage.kt       # 外观 / 同步 / 关于（含更新下载进度条）
 │       ├── DoitIcon.kt              # 24×24 网格手绘线性图标
 │       ├── gesture/SwipeState.kt # 双向滑动与上膛判定
 │       ├── components/           # 卡片 / 勾选 / 面板 / FAB 卫星
 │       └── theme/                # 设计令牌（配色、字体、皮肤）
 ├── .github/workflows/android.yml # CI：只在 tag 触发
-├── keystore/doit-release.jks # 统一签名证书（入库）
-└── design/                       # 视觉稿与效果图
+├── screenshots/                  # 功能截图（亮 / 暗主题）
+└── release.sh                    # 一键发版脚本
 ```
 
 ---
@@ -201,7 +205,7 @@ Doit/
 
 - `update/UpdateChecker.kt` 请求 `api.github.com/repos/nabaonan/doit-apk/releases/latest`，语义版本比较，提示「发现新版本 vX」或「已是最新」。
 - 发现新版后可应用内直接下载（`update/ApkDownloader.kt`，带进度条）并调起系统安装器（FileProvider + `REQUEST_INSTALL_PACKAGES`）。
-- 仓库公开时匿名即可访问、**无需 Token**；仓库若为私有，需在「设置 → 关于」填一个只读 GitHub Token（`contents:read` 权限）。
+- 仓库公开后匿名即可访问，**无需任何 Token**，设置里也不再提供 Token 输入框。
 
 ---
 
@@ -209,9 +213,13 @@ Doit/
 
 | 版本 / 轮次 | 内容 |
 | --- | --- |
-| （main） | 安全检查：签名密钥移出仓库，改用 Secrets/本地 keystore.properties 注入；开源后检查更新免 Token |
-| v1.0.12 | 检查更新网络重试、云按钮加大+进度环加深、Token 即时生效 |
-| v1.0.11 | 检查更新提示区分 Token 权限不足 |
+| **v1.0.13** | 检查更新发现新版后**应用内直接下载 APK（带进度条）+ 自动调起安装器**；移除 GitHub Token 输入框（仓库公开后匿名即可检查） |
+| v1.0.12 | 检查更新网络断连自动重试、云按钮加大到与进度环同尺寸并重绘图标、进度环轨道加深可见、Token 即时生效 |
+| v1.0.11 | 检查更新提示区分「未填 Token / Token 权限不足」 |
+| v1.0.10 | 编辑分类保存后关闭弹框提示成功；云同步按钮区分一致（绿勾云）/不一致（警示云） |
+| v1.0.9 | 检查更新日程改为「连通性测试通过才显示云同步按钮」（持久化 davVerified） |
+| v1.0.8 | 任务编辑功能上线：父/子/已完成三级编辑规则（子任务不可改分类、已完成无编辑入口） |
+| v1.0.7 | 全面统一命名为 doit（彻底移除 quandian 旧名）；README 重构；release 统一签名 |
 | v1.0.6 | 检查更新真正联网比对 GitHub Release（新增可选 Token） |
 | v1.0.5 | 首页今日待办过滤（只留活跃项 + 今日完成项）；月视图页面 + 已完成待办侧滑删除 |
 | v1.0.4 | 同步后本地改动不再被远程覆盖（本地优先 + 旧副本防护 + base 兜底） |
@@ -230,6 +238,8 @@ Doit/
 ## 交付物
 
 ```
-dist/                     # 迭代产物（本地构建，含 SHA256SUMS.txt）
-screenshots/              # 验收截图：r*_ 各轮证据、home/calendar/stats/settings 与 *_light/*_dark 主题对比
+screenshots/              # 功能截图：home/calendar/stats/settings 与 *_light/*_dark 主题对比
+doit/build/outputs/apk/   # 构建产物（debug / release，按版本命名）
 ```
+
+Release 安装包由 GitHub Actions 在打 tag 后自动构建并发布，见 <https://github.com/nabaonan/doit-apk/releases>。
