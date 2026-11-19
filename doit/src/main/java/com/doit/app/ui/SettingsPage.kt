@@ -82,7 +82,7 @@ fun SettingsPage(
     onDavEnabled: (Boolean) -> Unit,
     onTest: (String, String, String) -> Unit,
     onSaveSync: (String, String, String) -> Unit,
-    onCheckUpdate: () -> Unit,
+    onCheckUpdate: (String?) -> Unit,
     onGithubToken: (String) -> Unit,
     onToast: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -324,7 +324,12 @@ fun SettingsPage(
                     modifier = Modifier.padding(start = 13.dp, top = 6.dp, end = 4.dp),
                 )
                 Spacer(Modifier.height(10.dp))
-                PillButton("检查更新", primary = false, modifier = Modifier.fillMaxWidth()) { onCheckUpdate() }
+                PillButton("检查更新", primary = false, modifier = Modifier.fillMaxWidth()) {
+                    // token 是「失焦才保存」的，但用户往往填完就直接点按钮、焦点还在输入框里。
+                    // 这里把手上这份立即持久化 + 直接传进检查，避免用到旧 token（表现为"切 tab 才生效"）。
+                    onGithubToken(githubToken)
+                    onCheckUpdate(githubToken)
+                }
                 Text(
                     "doit · 把清单，写在一张纸上。",
                     fontSize = 10.5.sp,

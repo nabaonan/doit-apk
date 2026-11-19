@@ -321,10 +321,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 真正去 GitHub Releases 拉最新版本比对，不再写死“已是最新” */
-    fun checkUpdate() {
+    fun checkUpdate(tokenOverride: String? = null) {
         viewModelScope.launch {
             say("正在检查更新…")
-            val token = settingsRepo.current().githubToken.ifBlank { null }
+            // 优先用 UI 刚填的这份；没传（如历史调用）才回落到持久化里的值
+            val effective = if (tokenOverride != null) tokenOverride.trim() else settingsRepo.current().githubToken
+            val token = effective.ifBlank { null }
             val result = UpdateChecker.check(BuildConfig.VERSION_NAME, token)
             say(result.message)
         }
