@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -83,6 +84,8 @@ fun SettingsPage(
     onTest: (String, String, String) -> Unit,
     onSaveSync: (String, String, String) -> Unit,
     onCheckUpdate: (String?) -> Unit,
+    onDownload: () -> Unit,
+    updateState: UpdateState,
     onGithubToken: (String) -> Unit,
     onToast: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -324,11 +327,68 @@ fun SettingsPage(
                     modifier = Modifier.padding(start = 13.dp, top = 6.dp, end = 4.dp),
                 )
                 Spacer(Modifier.height(10.dp))
-                PillButton("检查更新", primary = false, modifier = Modifier.fillMaxWidth()) {
-                    // token 是「失焦才保存」的，但用户往往填完就直接点按钮、焦点还在输入框里。
-                    // 这里把手上这份立即持久化 + 直接传进检查，避免用到旧 token（表现为"切 tab 才生效"）。
-                    onGithubToken(githubToken)
-                    onCheckUpdate(githubToken)
+                when (updateState) {
+                    is UpdateState.Checking -> PillButton(
+                        label = "检查中…", primary = false, enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {}
+
+                    is UpdateState.Found -> {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(
+                                "发现新版本 v${updateState.version}",
+                                fontSize = 12.sp,
+                                color = Doit.AccentInk,
+                                fontFamily = SansFamily,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+                            )
+                            PillButton("下载并安装", primary = true, modifier = Modifier.fillMaxWidth()) {
+                                onDownload()
+                            }
+                        }
+                    }
+
+                    is UpdateState.Downloading -> {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(
+                                "正在下载 v${updateState.version}… ${(updateState.progress * 100).toInt()}%",
+                                fontSize = 12.sp,
+                                color = Doit.InkSoft,
+                                fontFamily = SansFamily,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+                            )
+                            // 线性进度条
+                            LinearProgressIndicator(
+                                progress = { updateState.progress },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(999.dp)),
+                                color = Doit.AccentFill,
+                                trackColor = Doit.LineSoft,
+                            )
+                        }
+                    }
+
+                    is UpdateState.Ready -> Text(
+                        "下载完成，正在打开安装器…",
+                        fontSize = 12.sp,
+                        color = Doit.AccentInk,
+                        fontFamily = SansFamily,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+
+                    is UpdateState.Error -> Text(
+                        updateState.message,
+                        fontSize = 12.sp,
+                        color = Doit.Danger,
+                        fontFamily = SansFamily,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+
+                    UpdateState.Idle -> PillButton("检查更新", primary = false, modifier = Modifier.fillMaxWidth()) {
+                        // token 是「失焦才保存」的，但用户往往填完就直接点按钮、焦点还在输入框里。
+                        // 这里把手上这份立即持久化 + 直接传进检查，避免用到旧 token（表现为"切 tab 才生效"）。
+                        onGithubToken(githubToken)
+                        onCheckUpdate(githubToken)
+                    }
                 }
                 Text(
                     "doit · 把清单，写在一张纸上。",

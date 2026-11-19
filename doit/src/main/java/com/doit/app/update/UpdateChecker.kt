@@ -28,11 +28,13 @@ object UpdateChecker {
 
     /**
      * [hasUpdate] 是否有新版本；[latestVersion] 远程最新版本号（不带 v 前缀，可能为空）；
+     * [apkUrl] 最新 Release 的 apk 下载直链（assets.browser_download_url，可能为空）；
      * [message] 直接作为界面的提示文案。
      */
     data class Result(
         val hasUpdate: Boolean,
         val latestVersion: String? = null,
+        val apkUrl: String? = null,
         val releaseUrl: String = RELEASE_URL,
         val message: String,
     )
@@ -64,10 +66,12 @@ object UpdateChecker {
                     return@withContext Result(false, message = "检查更新失败（${authHint(code, token)}）")
                 }
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val tag = JSONObject(body).optString("tag_name", "").trim()
+                val obj = JSONObject(body)
+                val tag = obj.optString("tag_name", "").trim()
                 if (tag.isBlank()) return@withContext Result(false, message = "远程返回异常，稍后再试")
                 val (has, message) = decide(tag, currentVersion)
-                return@withContext Result(has, tag.removePrefix("v"), message = message)
+                val apkUrl = findApkUrl(body)
+                return@withContext Result(has, tag.removePrefix("v"), apkUrl = apkUrl, message = message)
             } catch (e: SocketTimeoutException) {
                 Log.w(TAG, "检查更新超时 (attempt ${attempt + 1})", e)
                 lastNetworkError = e
@@ -90,6 +94,34 @@ object UpdateChecker {
     /** 网络类失败统一提示：点明是"连不上 GitHub"，不是 token 或 App 的问题 */
     private const val NETWORK_HINT = "检查更新失败：网络不太通畅，连不上 GitHub（api.github.com），请检查网络后重试"
     private const val RETRY_DELAY_MS = 1200L
+
+    /**
+     * 从 release JSON 文本里找一个可安装的 apk 直链。
+     * GitHub 会把 CI 构建的 apk 作为 release asset 上传，asset 形如：
+     *   { "name": "doit-1.0.12.apk", "browser_download_url": "https://.../doit-1.0.12.apk", ... }
+     * 用轻量字符串解析（避开 Android org.json 在单测不可用的问题）：
+     * 找 assets 数组里 name 以 .apk 结尾、且后面带 browser_download_url 的项。
+     */
+    internal fun findApkUrl(releaseJson: String): String? {
+        val assetsStart = releaseJson.indexOf("\"assets\"")
+        if (assetsStart < 0) return null
+        val start = releaseJson.indexOf('[', assetsStart)
+        val end = releaseJson.indexOf(']', start)
+        if (start < 0 || end < 0 || end <= start) return null
+        val assets = releaseJson.substring(start + 1, end)
+        // 每个 asset 是 { ... } 对象，逐个解析：name 是 .apk 且带浏览器直链就返回
+        val objRe = Regex("""\{[^{}]*\}""")
+        val nameRe = Regex("""\"name\"\s*:\s*\"([^\"]+)\"""")
+        val urlRe = Regex("""\"browser_download_url\"\s*:\s*\"([^\"]+)\"""")
+        for (m in objRe.findAll(assets)) {
+            val obj = m.value
+            val name = nameRe.find(obj)?.groupValues?.get(1).orEmpty()
+            if (!name.endsWith(".apk", ignoreCase = true)) continue
+            val url = urlRe.find(obj)?.groupValues?.get(1).orEmpty()
+            if (url.isNotBlank()) return url
+        }
+        return null
+    }
 
     /**
      * 纯决策逻辑（可单测）：给定远程 tag（可能带 v 前缀）与本地版本号，

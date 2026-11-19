@@ -2,10 +2,29 @@ package com.doit.app.update
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UpdateCheckerTest {
+
+    @Test
+    fun `从release的assets里取第一个apk直链`() {
+        val release = """{
+            "tag_name": "v1.0.7",
+            "assets": [
+                {"name": "doit-1.0.7-aab.aab", "browser_download_url": "https://x/aab"},
+                {"name": "doit-1.0.7.apk", "browser_download_url": "https://x/doit-1.0.7.apk"}
+            ]
+        }"""
+        assertEquals("https://x/doit-1.0.7.apk", UpdateChecker.findApkUrl(release))
+    }
+
+    @Test
+    fun `release没有apk资产时返回空`() {
+        assertNull(UpdateChecker.findApkUrl("""{"tag_name":"v1.0.7","assets":[]}"""))
+        assertNull(UpdateChecker.findApkUrl("""{"tag_name":"v1.0.7"}"""))
+    }
 
     @Test
     fun `远程比本地新则提示发现新版本`() {

@@ -67,6 +67,7 @@ fun MainScreen(vm: MainViewModel) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val page by vm.page.collectAsStateWithLifecycle()
     val sheet by vm.sheet.collectAsStateWithLifecycle()
+    val updateState by vm.updateState.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
 
     var menuOpen by remember { mutableStateOf(false) }
@@ -199,6 +200,8 @@ fun MainScreen(vm: MainViewModel) {
                     onTest = vm::testDav,
                     onSaveSync = vm::syncDav,
                     onCheckUpdate = vm::checkUpdate,
+                    onDownload = vm::downloadAndInstall,
+                    updateState = updateState,
                     onGithubToken = vm::setGithubToken,
                     onToast = vm::say,
                 )

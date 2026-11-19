@@ -1,7 +1,9 @@
 package com.doit.app.ui
 
 import android.app.Application
+import android.content.Intent
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.doit.app.BuildConfig
@@ -18,9 +20,11 @@ import com.doit.app.sync.SnapshotCodec
 import com.doit.app.sync.SyncEngine
 import com.doit.app.sync.SyncMerge
 import com.doit.app.sync.WebDavClient
+import com.doit.app.update.ApkDownloader
 import com.doit.app.update.UpdateChecker
 import com.doit.app.ui.theme.FlowSkin
 import com.doit.app.ui.theme.parseHex
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +32,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -49,6 +56,16 @@ sealed interface Sheet {
 }
 
 data class CategoryUi(val name: String, val color: Color, val count: Int)
+
+/** 应用内更新状态：检查→发现新版本→下载（带进度）→可安装 / 出错 */
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data class Found(val version: String, val apkUrl: String?) : UpdateState
+    data class Downloading(val version: String, val progress: Float) : UpdateState
+    data class Ready(val version: String, val file: java.io.File) : UpdateState
+    data class Error(val message: String) : UpdateState
+}
 
 /** 同步一致性计算需要含墓碑的完整快照，与列表展示用的活数据分开观察 */
 private data class SyncBundle(
@@ -94,10 +111,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _page = MutableStateFlow(Page.List)
     private val _sheet = MutableStateFlow<Sheet?>(null)
     private val _toast = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
 
     val page: StateFlow<Page> = _page
     val sheet: StateFlow<Sheet?> = _sheet
     val toast = _toast.asSharedFlow()
+    /** 应用内更新状态：检查 / 发现新版 / 下载进度 / 可安装 / 出错 */
+    val updateState: StateFlow<UpdateState> = _updateState
 
     /** 新建任务后请求列表回顶（新任务插在第一位，但 LazyColumn 会保持原视口锚点） */
     private val _scrollTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -320,15 +340,71 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsRepo.setGithubToken(token.trim()) }
     }
 
-    /** 真正去 GitHub Releases 拉最新版本比对，不再写死“已是最新” */
+    /** 真正去 GitHub Releases 拉最新版本比对，不再写死“已是最新”；发现新版把详情写进 updateState */
     fun checkUpdate(tokenOverride: String? = null) {
         viewModelScope.launch {
-            say("正在检查更新…")
+            _updateState.value = UpdateState.Checking
             // 优先用 UI 刚填的这份；没传（如历史调用）才回落到持久化里的值
             val effective = if (tokenOverride != null) tokenOverride.trim() else settingsRepo.current().githubToken
             val token = effective.ifBlank { null }
             val result = UpdateChecker.check(BuildConfig.VERSION_NAME, token)
-            say(result.message)
+            when {
+                result.hasUpdate -> {
+                    val version = result.latestVersion ?: ""
+                    _updateState.value = UpdateState.Found(version, result.apkUrl)
+                    say(result.message)
+                }
+                else -> {
+                    _updateState.value = UpdateState.Idle
+                    say(result.message)
+                }
+            }
+        }
+    }
+
+    /** 下载已发现的新版 apk 到私有目录，带进度；下完自动跳到安装器 */
+    fun downloadAndInstall() {
+        val state = _updateState.value as? UpdateState.Found ?: return
+        val url = state.apkUrl
+        if (url.isNullOrBlank()) {
+            say("该版本没有打包 app，请到 Release 页手动下载")
+            return
+        }
+        viewModelScope.launch {
+            _updateState.value = UpdateState.Downloading(state.version, 0f)
+            val app = getApplication<Application>()
+            val token = settingsRepo.current().githubToken.ifBlank { null }
+            val target = File(app.cacheDir, "doit-${state.version}.apk")
+            val result = withContext(Dispatchers.IO) {
+                ApkDownloader.download(
+                    url = url,
+                    token = token,
+                    target = target,
+                    onProgress = { p -> _updateState.value = UpdateState.Downloading(state.version, p) },
+                )
+            }
+            result.onSuccess {
+                _updateState.value = UpdateState.Ready(state.version, target)
+                installApk(target)
+            }.onFailure { e ->
+                _updateState.value = UpdateState.Error(ApkDownloader.friendlyError(e))
+            }
+        }
+    }
+
+    /** 打开系统安装器去安装已下载的 apk。需要 REQUEST_INSTALL_PACKAGES 权限（Manifest 已声明） */
+    private fun installApk(file: File) {
+        runCatching {
+            val app = getApplication<Application>()
+            val uri = FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            app.startActivity(intent)
+        }.onFailure {
+            say("打开安装器失败：${it.message ?: "请到 Release 页手动下载"}")
         }
     }
 
