@@ -265,52 +265,52 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
         }
 
         DoitIconKind.CloudSync -> {
-            // 云同步：圆润云朵轮廓 + 云内一上一下的双向箭头
+            // 云同步：饱满云朵 + 云内一对环形箭头（上、下），表示双向拉取 / 推送
             val cloud = Path().apply {
-                moveTo(7.9f * u, 17f * u)
-                quadraticBezierTo(3.6f * u, 17f * u, 4.1f * u, 13.4f * u)
-                quadraticBezierTo(4.4f * u, 10.6f * u, 7.3f * u, 10.5f * u)
-                quadraticBezierTo(8.4f * u, 6.6f * u, 12.6f * u, 7.4f * u)
-                quadraticBezierTo(15.9f * u, 7.4f * u, 16.6f * u, 10.8f * u)
-                quadraticBezierTo(20.2f * u, 11f * u, 19.7f * u, 14.6f * u)
-                quadraticBezierTo(19.4f * u, 17f * u, 16.9f * u, 17f * u)
+                moveTo(8f * u, 16.6f * u)
+                quadraticBezierTo(3.9f * u, 16.6f * u, 4.4f * u, 12.9f * u)
+                quadraticBezierTo(4.8f * u, 10.3f * u, 7.6f * u, 10.2f * u)
+                quadraticBezierTo(8.7f * u, 6.5f * u, 12.8f * u, 7.2f * u)
+                quadraticBezierTo(16f * u, 7.4f * u, 16.7f * u, 10.5f * u)
+                quadraticBezierTo(20f * u, 10.7f * u, 19.6f * u, 14.1f * u)
+                quadraticBezierTo(19.3f * u, 16.6f * u, 16.9f * u, 16.6f * u)
                 close()
             }
             drawPath(cloud, c, style = stroke)
-            // 左箭头向上
-            line(10.2f, 13.9f, 10.2f, 11f)
-            line(8.9f, 12.3f, 10.2f, 11f)
-            line(11.5f, 12.3f, 10.2f, 11f)
-            // 右箭头向下
-            line(13.8f, 11f, 13.8f, 13.9f)
-            line(12.5f, 12.6f, 13.8f, 13.9f)
-            line(15.1f, 12.6f, 13.8f, 13.9f)
+            // 上箭头（云内偏左）：指示把本机改动"推上去"
+            line(10.4f, 13.3f, 10.4f, 10.6f)
+            line(9.1f, 11.9f, 10.4f, 10.6f)
+            line(11.7f, 11.9f, 10.4f, 10.6f)
+            // 下箭头（云内偏右）：指示从远程"拉下来"
+            line(14.2f, 11.6f, 14.2f, 14.1f)
+            line(13f, 12.8f, 14.2f, 14.1f)
+            line(15.4f, 12.8f, 14.2f, 14.1f)
         }
 
         DoitIconKind.CloudSyncOk -> {
-            // 云已同步：同一朵云，云前压一支实心对勾，表示「与远程一致」
+            // 云已同步：同一朵饱满的云，云内压一支圆头对勾，表示「与远程一致」
             val cloud = Path().apply {
-                moveTo(9.6f * u, 17f * u)
-                quadraticBezierTo(5.3f * u, 17f * u, 5.8f * u, 13.4f * u)
-                quadraticBezierTo(6.1f * u, 10.6f * u, 9f * u, 10.5f * u)
-                quadraticBezierTo(10.1f * u, 6.6f * u, 14.3f * u, 7.4f * u)
-                quadraticBezierTo(17.6f * u, 7.4f * u, 18.3f * u, 10.8f * u)
-                quadraticBezierTo(21.9f * u, 11f * u, 21.4f * u, 14.6f * u)
-                quadraticBezierTo(21.1f * u, 17f * u, 18.6f * u, 17f * u)
+                moveTo(9f * u, 16.6f * u)
+                quadraticBezierTo(4.9f * u, 16.6f * u, 5.4f * u, 12.9f * u)
+                quadraticBezierTo(5.8f * u, 10.3f * u, 8.6f * u, 10.2f * u)
+                quadraticBezierTo(9.7f * u, 6.5f * u, 13.8f * u, 7.2f * u)
+                quadraticBezierTo(17f * u, 7.4f * u, 17.7f * u, 10.5f * u)
+                quadraticBezierTo(21f * u, 10.7f * u, 20.6f * u, 14.1f * u)
+                quadraticBezierTo(20.3f * u, 16.6f * u, 17.9f * u, 16.6f * u)
                 close()
             }
             drawPath(cloud, c, style = stroke)
-            // 对勾：实心画笔去描，比线更醒目
+            // 对勾：圆头粗线，云内居中偏右下，比例与大号按钮匹配
             val check = Path().apply {
-                moveTo(12.6f * u, 13f * u)
-                lineTo(14.2f * u, 14.8f * u)
-                lineTo(17.3f * u, 11.2f * u)
+                moveTo(11.6f * u, 12.5f * u)
+                lineTo(13.4f * u, 14.4f * u)
+                lineTo(17.4f * u, 10.1f * u)
             }
             drawPath(
                 check,
                 c,
                 style = Stroke(
-                    width = 3.4f * u,
+                    width = 3.6f * u,
                     cap = StrokeCap.Round,
                     join = StrokeJoin.Round,
                 ),

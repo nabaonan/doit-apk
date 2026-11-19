@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -329,25 +330,26 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () ->
 }
 
 /**
- * 今日进度左侧的云同步按钮：浅底描边圆钮 + 主题色图标，尺寸与进度环同一视觉重量。
+ * 今日进度左侧的云同步按钮：浅底实心圆钮 + 主题色图标，尺寸与右侧进度环相当（54dp vs 56dp），
+ * 同处标题行时视觉重量一致，不再有"小按钮贴大环"的失衡。
  * [consistent] = 本地与远程是否一致：一致画「绿勾云」（确认已同步），
  * 不一致画「双向箭头云」并用警示色，一眼能看出还有改动没推上去。
  */
 @Composable
 private fun CloudSyncButton(consistent: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(999.dp)
+    val shape = CircleShape
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(54.dp)
             .clip(shape)
-            .background(Doit.Surface2)
-            .border(1.dp, Doit.Line, shape)
+            .background(if (consistent) Doit.AccentSoft else Doit.Surface2)
+            .border(1.2.dp, if (consistent) Doit.AccentInk else Doit.Line, shape)
             .tapFeedback { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         DoitIcon(
             kind = if (consistent) DoitIconKind.CloudSyncOk else DoitIconKind.CloudSync,
-            size = 18.dp,
+            size = 30.dp,
             tint = if (consistent) Doit.AccentInk else Doit.Strike,
         )
     }

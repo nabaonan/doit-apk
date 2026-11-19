@@ -235,7 +235,10 @@ fun ProgressRing(done: Int, total: Int, modifier: Modifier = Modifier, size: Dp 
             val r = this.size.minDimension / 2f - stroke
             val topLeft = Offset(center.x - r, center.y - r)
             val arcSize = Size(r * 2, r * 2)
-            drawArc(Doit.LineSoft, 0f, 360f, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke))
+            // 底环用 InkFaint：它是"可读文字灰"，在浅绿底上能看清一圈轨道。
+            // Line/LineSoft 都是低透明度描边，叠在接近同色的浅底上几乎隐形，
+            // 与左侧有实底、有描边的大云按钮放一起会显得"只有云没有环"。
+            drawArc(Doit.InkFaint, 0f, 360f, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke))
             if (animated > 0.001f) {
                 drawArc(
                     // 细弧线用 accentInk：#34C7A8 当 3.4dp 的线画在浅绿底上只有 1.9:1，会"虚"
