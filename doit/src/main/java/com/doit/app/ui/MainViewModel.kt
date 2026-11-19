@@ -336,18 +336,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsRepo.setThemeMode(mode) }
     }
 
-    fun setGithubToken(token: String) {
-        viewModelScope.launch { settingsRepo.setGithubToken(token.trim()) }
-    }
-
-    /** 真正去 GitHub Releases 拉最新版本比对，不再写死“已是最新”；发现新版把详情写进 updateState */
-    fun checkUpdate(tokenOverride: String? = null) {
+    /** 真正去 GitHub Releases 拉最新版本比对，不再写死“已是最新”；发现新版把详情写进 updateState。
+     *  仓库公开后匿名即可访问，无需 Token。 */
+    fun checkUpdate() {
         viewModelScope.launch {
             _updateState.value = UpdateState.Checking
-            // 优先用 UI 刚填的这份；没传（如历史调用）才回落到持久化里的值
-            val effective = if (tokenOverride != null) tokenOverride.trim() else settingsRepo.current().githubToken
-            val token = effective.ifBlank { null }
-            val result = UpdateChecker.check(BuildConfig.VERSION_NAME, token)
+            val result = UpdateChecker.check(BuildConfig.VERSION_NAME, null)
             when {
                 result.hasUpdate -> {
                     val version = result.latestVersion ?: ""

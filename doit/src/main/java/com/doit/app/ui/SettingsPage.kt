@@ -83,10 +83,9 @@ fun SettingsPage(
     onDavEnabled: (Boolean) -> Unit,
     onTest: (String, String, String) -> Unit,
     onSaveSync: (String, String, String) -> Unit,
-    onCheckUpdate: (String?) -> Unit,
+    onCheckUpdate: () -> Unit,
     onDownload: () -> Unit,
     updateState: UpdateState,
-    onGithubToken: (String) -> Unit,
     onToast: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -99,8 +98,6 @@ fun SettingsPage(
     val urlInvalid = urlTouched && urlError != null
     // 三栏都填了才让按钮亮起来
     val canSubmit = url.isNotBlank() && user.isNotBlank() && pass.isNotBlank()
-    // 检查更新用的 GitHub Token，失焦时保存
-    var githubToken by remember(settings.githubToken) { mutableStateOf(settings.githubToken) }
     // 顶部分类胶囊：当前选中的分类
     var tab by remember { mutableStateOf(SettingsTab.APPEARANCE) }
 
@@ -312,21 +309,13 @@ fun SettingsPage(
                     Text("v${BuildConfig.VERSION_NAME}", style = numeric(12).copy(fontSize = 12.sp), color = Doit.InkSoft)
                 }
                 Spacer(Modifier.height(6.dp))
-                SettingField(
-                    value = githubToken,
-                    onChange = { if (it.length <= 200) githubToken = it },
-                    onFocusChange = { focused -> if (!focused) onGithubToken(githubToken) },
-                    placeholder = "GitHub Token（可选，私有仓库检查更新用）",
-                    password = true,
-                )
                 Text(
-                    "项目是私有仓库，匿名调用 GitHub API 会被拒绝；填一个只读 TOKEN（contents:read）即可正常检查更新，留空也能点，但会提示失败。",
+                    "仓库已公开，检查更新可直接联网获取最新版本，无需任何 Token。",
                     fontSize = 10.sp,
                     color = Doit.InkFaint,
                     lineHeight = 15.sp,
-                    modifier = Modifier.padding(start = 13.dp, top = 6.dp, end = 4.dp),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 12.dp),
                 )
-                Spacer(Modifier.height(10.dp))
                 when (updateState) {
                     is UpdateState.Checking -> PillButton(
                         label = "检查中…", primary = false, enabled = false,
@@ -384,10 +373,7 @@ fun SettingsPage(
                     )
 
                     UpdateState.Idle -> PillButton("检查更新", primary = false, modifier = Modifier.fillMaxWidth()) {
-                        // token 是「失焦才保存」的，但用户往往填完就直接点按钮、焦点还在输入框里。
-                        // 这里把手上这份立即持久化 + 直接传进检查，避免用到旧 token（表现为"切 tab 才生效"）。
-                        onGithubToken(githubToken)
-                        onCheckUpdate(githubToken)
+                        onCheckUpdate()
                     }
                 }
                 Text(

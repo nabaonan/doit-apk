@@ -202,7 +202,6 @@ fun MainScreen(vm: MainViewModel) {
                     onCheckUpdate = vm::checkUpdate,
                     onDownload = vm::downloadAndInstall,
                     updateState = updateState,
-                    onGithubToken = vm::setGithubToken,
                     onToast = vm::say,
                 )
             }
