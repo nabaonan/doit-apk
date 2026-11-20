@@ -68,6 +68,7 @@ fun MainScreen(vm: MainViewModel) {
     val page by vm.page.collectAsStateWithLifecycle()
     val sheet by vm.sheet.collectAsStateWithLifecycle()
     val updateState by vm.updateState.collectAsStateWithLifecycle()
+    val syncing by vm.syncing.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
 
     var menuOpen by remember { mutableStateOf(false) }
@@ -117,6 +118,7 @@ fun MainScreen(vm: MainViewModel) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             ListHeader(
                 state = state,
+                syncing = syncing,
                 onFilter = vm::setFilter,
                 onSync = { vm.syncDav(state.settings.davUrl, state.settings.davUser, state.settings.davPass) },
             )
@@ -263,7 +265,7 @@ fun MainScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () -> Unit) {
+private fun ListHeader(state: UiState, syncing: Boolean, onFilter: (String) -> Unit, onSync: () -> Unit) {
     val today = LocalDate.now()
     val kicker = "${today.year}年${today.monthValue}月${today.dayOfMonth}日 星期${WEEKDAYS_CN[today.dayOfWeek.value - 1]}"
 
@@ -292,6 +294,7 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () ->
             if (cloudReady) {
                 CloudSyncButton(
                     consistent = state.cloudConsistent,
+                    syncing = syncing,
                     onClick = onSync,
                 )
                 Spacer(Modifier.width(8.dp))
@@ -334,25 +337,33 @@ private fun ListHeader(state: UiState, onFilter: (String) -> Unit, onSync: () ->
 /**
  * 今日进度左侧的云同步按钮：浅底实心圆钮 + 主题色图标，尺寸与右侧进度环相当（54dp vs 56dp），
  * 同处标题行时视觉重量一致，不再有"小按钮贴大环"的失衡。
- * [consistent] = 本地与远程是否一致：一致画「绿勾云」（确认已同步），
- * 不一致画「双向箭头云」并用警示色，一眼能看出还有改动没推上去。
+ * [consistent] = 本地与远程是否一致：一致画「云 + 对勾」（确认已同步），
+ * 不一致画「云 + 上箭头」并用警示色，一眼能看出还有改动没推上去。
+ * [syncing] = 正在同步：切换成上传动画（旋转环 + 上浮箭头），期间禁用点击防连点。
  */
 @Composable
-private fun CloudSyncButton(consistent: Boolean, onClick: () -> Unit) {
+private fun CloudSyncButton(consistent: Boolean, syncing: Boolean, onClick: () -> Unit) {
     val shape = CircleShape
+    // 同步期间统一用主题色底，动画才有"进行中"的聚焦感
+    val bg = if (syncing) Doit.AccentSoft else if (consistent) Doit.AccentSoft else Doit.Surface2
+    val border = if (syncing || consistent) Doit.AccentInk else Doit.Line
     Box(
         modifier = Modifier
             .size(54.dp)
             .clip(shape)
-            .background(if (consistent) Doit.AccentSoft else Doit.Surface2)
-            .border(1.2.dp, if (consistent) Doit.AccentInk else Doit.Line, shape)
-            .tapFeedback { onClick() },
+            .background(bg)
+            .border(1.2.dp, border, shape)
+            .tapFeedback(enabled = !syncing) { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        DoitIcon(
-            kind = if (consistent) DoitIconKind.CloudSyncOk else DoitIconKind.CloudSync,
-            size = 30.dp,
-            tint = if (consistent) Doit.AccentInk else Doit.Strike,
-        )
+        if (syncing) {
+            CloudSyncUploadAnimation(size = 50.dp, tint = Doit.AccentInk)
+        } else {
+            DoitIcon(
+                kind = if (consistent) DoitIconKind.CloudSyncOk else DoitIconKind.CloudSync,
+                size = 30.dp,
+                tint = if (consistent) Doit.AccentInk else Doit.Strike,
+            )
+        }
     }
 }

@@ -25,6 +25,7 @@ import com.doit.app.update.UpdateChecker
 import com.doit.app.ui.theme.FlowSkin
 import com.doit.app.ui.theme.parseHex
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -112,10 +113,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _sheet = MutableStateFlow<Sheet?>(null)
     private val _toast = MutableSharedFlow<String>(extraBufferCapacity = 8)
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    private val _syncing = MutableStateFlow(false)
 
     val page: StateFlow<Page> = _page
     val sheet: StateFlow<Sheet?> = _sheet
     val toast = _toast.asSharedFlow()
+    /** 云同步按钮的上传动画开关：真正执行同步期间为 true，至少展示 ~700ms 让动画看得见 */
+    val syncing: StateFlow<Boolean> = _syncing
     /** 应用内更新状态：检查 / 发现新版 / 下载进度 / 可安装 / 出错 */
     val updateState: StateFlow<UpdateState> = _updateState
 
@@ -443,7 +447,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun syncDav(url: String, user: String, pass: String) {
         DavUrl.validate(url)?.let { say(it); return }
+        if (_syncing.value) return // 防连点：正在同步时忽略再次点击
         viewModelScope.launch {
+            val started = System.currentTimeMillis()
+            _syncing.value = true
             settingsRepo.setDavConfig(url, user, pass)
             say("正在同步…")
             syncEngine.synchronize(url, user, pass).fold(
@@ -456,6 +463,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     say(it.message ?: "同步失败")
                 },
             )
+            // 本地网络很快，保证动画至少完整播放一轮（~700ms），否则一闪而过看不清
+            delay((700 - (System.currentTimeMillis() - started)).coerceAtLeast(0))
+            _syncing.value = false
         }
     }
 

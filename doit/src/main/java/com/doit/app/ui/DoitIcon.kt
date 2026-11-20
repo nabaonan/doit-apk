@@ -1,8 +1,16 @@
 package com.doit.app.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -265,56 +273,108 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
         }
 
         DoitIconKind.CloudSync -> {
-            // 云同步：饱满云朵 + 云内一对环形箭头（上、下），表示双向拉取 / 推送
-            val cloud = Path().apply {
-                moveTo(8f * u, 16.6f * u)
-                quadraticBezierTo(3.9f * u, 16.6f * u, 4.4f * u, 12.9f * u)
-                quadraticBezierTo(4.8f * u, 10.3f * u, 7.6f * u, 10.2f * u)
-                quadraticBezierTo(8.7f * u, 6.5f * u, 12.8f * u, 7.2f * u)
-                quadraticBezierTo(16f * u, 7.4f * u, 16.7f * u, 10.5f * u)
-                quadraticBezierTo(20f * u, 10.7f * u, 19.6f * u, 14.1f * u)
-                quadraticBezierTo(19.3f * u, 16.6f * u, 16.9f * u, 16.6f * u)
-                close()
-            }
-            drawPath(cloud, c, style = stroke)
-            // 上箭头（云内偏左）：指示把本机改动"推上去"
-            line(10.4f, 13.3f, 10.4f, 10.6f)
-            line(9.1f, 11.9f, 10.4f, 10.6f)
-            line(11.7f, 11.9f, 10.4f, 10.6f)
-            // 下箭头（云内偏右）：指示从远程"拉下来"
-            line(14.2f, 11.6f, 14.2f, 14.1f)
-            line(13f, 12.8f, 14.2f, 14.1f)
-            line(15.4f, 12.8f, 14.2f, 14.1f)
+            // 待同步：一朵饱满的云 + 一支粗的向上箭头（upload），语义单一、一眼看懂：
+            // 有本地改动没推上去，点它上传。箭头比云描边略粗，缩小到 30dp 仍清晰。
+            drawPath(cloudPath(u), c, style = stroke)
+            val aw = w * 1.5f
+            drawLine(c, Offset(12f * u, 15.4f * u), Offset(12f * u, 9.5f * u), aw, StrokeCap.Round)
+            drawLine(c, Offset(9.4f * u, 12.1f * u), Offset(12f * u, 9.5f * u), aw, StrokeCap.Round)
+            drawLine(c, Offset(14.6f * u, 12.1f * u), Offset(12f * u, 9.5f * u), aw, StrokeCap.Round)
         }
 
         DoitIconKind.CloudSyncOk -> {
-            // 云已同步：同一朵饱满的云，云内压一支圆头对勾，表示「与远程一致」
-            val cloud = Path().apply {
-                moveTo(9f * u, 16.6f * u)
-                quadraticBezierTo(4.9f * u, 16.6f * u, 5.4f * u, 12.9f * u)
-                quadraticBezierTo(5.8f * u, 10.3f * u, 8.6f * u, 10.2f * u)
-                quadraticBezierTo(9.7f * u, 6.5f * u, 13.8f * u, 7.2f * u)
-                quadraticBezierTo(17f * u, 7.4f * u, 17.7f * u, 10.5f * u)
-                quadraticBezierTo(21f * u, 10.7f * u, 20.6f * u, 14.1f * u)
-                quadraticBezierTo(20.3f * u, 16.6f * u, 17.9f * u, 16.6f * u)
-                close()
-            }
-            drawPath(cloud, c, style = stroke)
-            // 对勾：圆头粗线，云内居中偏右下，比例与大号按钮匹配
+            // 已同步：同一朵云 + 圆头对勾，表示「与远程一致」。与上传态共用云形，
+            // 只换内部符号（勾 / 上箭头），状态差异一眼可辨且风格统一。
+            drawPath(cloudPath(u), c, style = stroke)
             val check = Path().apply {
-                moveTo(11.6f * u, 12.5f * u)
-                lineTo(13.4f * u, 14.4f * u)
-                lineTo(17.4f * u, 10.1f * u)
+                moveTo(9.1f * u, 12.4f * u)
+                lineTo(11.3f * u, 14.6f * u)
+                lineTo(15.2f * u, 10.2f * u)
             }
             drawPath(
                 check,
                 c,
-                style = Stroke(
-                    width = 3.6f * u,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round,
-                ),
+                style = Stroke(width = w * 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
+        }
+    }
+}
+
+/** 24×24 网格上一朵饱满、左右对称的云；静态图标与同步动画共用，保证形状完全一致。
+ * [scale] 以 (12,12) 为中心缩放，动画里让云随呼吸轻微放大时不必重算 Bézier 控制点。 */
+private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+private fun cloudPath(u: Float, scale: Float = 1f): Path = Path().apply {
+    fun px(v: Float) = (12f + (v - 12f) * scale) * u
+    moveTo(px(7.6f), px(16.8f))
+    quadraticBezierTo(px(3.6f), px(16.8f), px(4.1f), px(12.9f))
+    quadraticBezierTo(px(4.5f), px(10.2f), px(7.4f), px(10.1f))
+    quadraticBezierTo(px(8.6f), px(6.4f), px(12.6f), px(7.1f))
+    quadraticBezierTo(px(16.2f), px(7.2f), px(16.9f), px(10.4f))
+    quadraticBezierTo(px(20.4f), px(10.6f), px(20f), px(14.2f))
+    quadraticBezierTo(px(19.7f), px(16.8f), px(16.6f), px(16.8f))
+    close()
+}
+
+/**
+ * 同步进行中的上传动画：外圈一段缺口圆环匀速旋转（表示「正在处理」），
+ * 云朵内一支向上箭头循环上浮并淡出（表示「数据正在上传」）。
+ * 铺满圆形按钮，尺寸传按钮边长即可。
+ */
+@Composable
+fun CloudSyncUploadAnimation(
+    size: Dp,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    val infinite = rememberInfiniteTransition(label = "cloudUpload")
+    val rise by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1150, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        label = "arrowRise",
+    )
+    val spin by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        label = "ringSpin",
+    )
+    val breathe by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1150, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "cloudBreathe",
+    )
+    Canvas(modifier.size(size)) {
+        val u = this.size.minDimension / 24f
+        val cloudScale = lerp(0.82f, 0.88f, breathe)
+
+        // 外圈：一段 300° 的缺口圆环匀速旋转——经典「进行中」信号，填满 54dp 也不空
+        drawArc(
+            color = tint.copy(alpha = 0.35f),
+            startAngle = spin,
+            sweepAngle = 300f,
+            useCenter = false,
+            topLeft = Offset(2.2f * u, 2.2f * u),
+            size = Size(19.6f * u, 19.6f * u),
+            style = Stroke(width = 1.7f * u, cap = StrokeCap.Round),
+        )
+
+        // 云：随呼吸轻微缩放
+        drawPath(cloudPath(u, cloudScale), tint, style = Stroke(width = 1.7f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
+
+        // 上传箭头：在云朵内部从下往上浮，头尾淡入淡出，循环往复。
+        // 注意 arrowY 是 24 网格单位，落笔前必须乘 u 换成像素，否则会漂到画布顶边。
+        val arrowY = lerp(13.8f, 10.6f, rise) * u
+        val fade = minOf((rise * 5f).coerceAtMost(1f), ((1f - rise) * 4f).coerceAtMost(1f))
+        if (fade > 0.01f) {
+            val c = tint.copy(alpha = fade)
+            val aw = 2.3f * u
+            val tipY = arrowY - 1.4f * u
+            drawLine(c, Offset(12f * u, arrowY + 1.9f * u), Offset(12f * u, tipY), aw, StrokeCap.Round)
+            drawLine(c, Offset(9.8f * u, arrowY + 0.2f * u), Offset(12f * u, tipY), aw, StrokeCap.Round)
+            drawLine(c, Offset(14.2f * u, arrowY + 0.2f * u), Offset(12f * u, tipY), aw, StrokeCap.Round)
         }
     }
 }
