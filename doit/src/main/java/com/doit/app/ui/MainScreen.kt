@@ -9,7 +9,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -335,35 +334,30 @@ private fun ListHeader(state: UiState, syncing: Boolean, onFilter: (String) -> U
 }
 
 /**
- * 今日进度左侧的云同步按钮：浅底实心圆钮 + 主题色图标，尺寸与右侧进度环相当（54dp vs 56dp），
- * 同处标题行时视觉重量一致，不再有"小按钮贴大环"的失衡。
- * [consistent] = 本地与远程是否一致：一致画「云 + 对勾」（确认已同步），
- * 不一致画「云 + 上箭头」并用警示色，一眼能看出还有改动没推上去。
- * [syncing] = 正在同步：切换成上传动画（旋转环 + 上浮箭头），期间禁用点击防连点。
+ * 今日进度左侧的云同步按钮：浅底实心圆钮 + 云同步视觉，尺寸与右侧进度环相当（54dp vs 56dp）。
+ * 三态由 [CloudSyncVisual] 统一表达：
+ * - 已同步 [consistent]：无圆环 + 云内对勾（主题绿）；
+ * - 未同步：外圈虚线环 + 云内双向箭头（朱橘），提醒有改动待推；
+ * - 同步中 [syncing]：外圈环形进度 + 云内双向箭头流动动画（主题绿），期间禁用点击防连点。
+ * 按钮本身不描边，"圆环"完全交给视觉层，这样已同步态才是真正的"周边没有圆环"。
  */
 @Composable
 private fun CloudSyncButton(consistent: Boolean, syncing: Boolean, onClick: () -> Unit) {
-    val shape = CircleShape
-    // 同步期间统一用主题色底，动画才有"进行中"的聚焦感
-    val bg = if (syncing) Doit.AccentSoft else if (consistent) Doit.AccentSoft else Doit.Surface2
-    val border = if (syncing || consistent) Doit.AccentInk else Doit.Line
+    val bg = if (consistent || syncing) Doit.AccentSoft else Doit.Surface2
+    val tint = if (consistent || syncing) Doit.AccentInk else Doit.Strike
     Box(
         modifier = Modifier
             .size(54.dp)
-            .clip(shape)
+            .clip(CircleShape)
             .background(bg)
-            .border(1.2.dp, border, shape)
             .tapFeedback(enabled = !syncing) { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        if (syncing) {
-            CloudSyncUploadAnimation(size = 50.dp, tint = Doit.AccentInk)
-        } else {
-            DoitIcon(
-                kind = if (consistent) DoitIconKind.CloudSyncOk else DoitIconKind.CloudSync,
-                size = 30.dp,
-                tint = if (consistent) Doit.AccentInk else Doit.Strike,
-            )
-        }
+        CloudSyncVisual(
+            size = 50.dp,
+            consistent = consistent,
+            syncing = syncing,
+            tint = tint,
+        )
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -273,13 +274,9 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
         }
 
         DoitIconKind.CloudSync -> {
-            // 待同步：一朵饱满的云 + 一支粗的向上箭头（upload），语义单一、一眼看懂：
-            // 有本地改动没推上去，点它上传。箭头比云描边略粗，缩小到 30dp 仍清晰。
+            // 待同步：云 + 一对双向箭头（左向上、右向下），表示本地与远程双向同步。
             drawPath(cloudPath(u), c, style = stroke)
-            val aw = w * 1.5f
-            drawLine(c, Offset(12f * u, 15.4f * u), Offset(12f * u, 9.5f * u), aw, StrokeCap.Round)
-            drawLine(c, Offset(9.4f * u, 12.1f * u), Offset(12f * u, 9.5f * u), aw, StrokeCap.Round)
-            drawLine(c, Offset(14.6f * u, 12.1f * u), Offset(12f * u, 9.5f * u), aw, StrokeCap.Round)
+            drawSyncArrows(c, u, w * 1.4f)
         }
 
         DoitIconKind.CloudSyncOk -> {
@@ -302,8 +299,6 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
 
 /** 24×24 网格上一朵饱满、左右对称的云；静态图标与同步动画共用，保证形状完全一致。
  * [scale] 以 (12,12) 为中心缩放，动画里让云随呼吸轻微放大时不必重算 Bézier 控制点。 */
-private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
-
 private fun cloudPath(u: Float, scale: Float = 1f): Path = Path().apply {
     fun px(v: Float) = (12f + (v - 12f) * scale) * u
     moveTo(px(7.6f), px(16.8f))
@@ -316,65 +311,122 @@ private fun cloudPath(u: Float, scale: Float = 1f): Path = Path().apply {
     close()
 }
 
+/** 云朵内的一对双向箭头（左向上 / 右向下）。scale 以 (12,12) 为中心缩放；
+ * [upShift]/[downShift] 是沿各自方向的位移（网格单位），动画里让两箭头相背而行表示双向传输。 */
+private fun DrawScope.drawSyncArrows(
+    c: Color,
+    w: Float,
+    u: Float,
+    scale: Float = 1f,
+    upShift: Float = 0f,
+    downShift: Float = 0f,
+) {
+    fun px(v: Float) = (12f + (v - 12f) * scale) * u
+    // 左：向上箭头（箭头顶点在上），箭头间距拉开、两翼收窄，避免缩到小尺寸后糊成一团
+    drawLine(c, Offset(px(9.0f), px(14.4f + upShift)), Offset(px(9.0f), px(10.0f + upShift)), w, StrokeCap.Round)
+    drawLine(c, Offset(px(7.7f), px(11.5f + upShift)), Offset(px(9.0f), px(10.0f + upShift)), w, StrokeCap.Round)
+    drawLine(c, Offset(px(10.3f), px(11.5f + upShift)), Offset(px(9.0f), px(10.0f + upShift)), w, StrokeCap.Round)
+    // 右：向下箭头（箭头顶点在下）
+    drawLine(c, Offset(px(15.0f), px(9.6f + downShift)), Offset(px(15.0f), px(14.0f + downShift)), w, StrokeCap.Round)
+    drawLine(c, Offset(px(13.7f), px(12.5f + downShift)), Offset(px(15.0f), px(14.0f + downShift)), w, StrokeCap.Round)
+    drawLine(c, Offset(px(16.3f), px(12.5f + downShift)), Offset(px(15.0f), px(14.0f + downShift)), w, StrokeCap.Round)
+}
+
+/** 云朵内的对勾（已同步）。[w] 即最终描边宽度，[scale] 以云心为中心缩放几何。 */
+private fun DrawScope.drawCloudCheck(c: Color, w: Float, u: Float, scale: Float) {
+    fun px(v: Float) = (12f + (v - 12f) * scale) * u
+    drawPath(
+        Path().apply {
+            moveTo(px(9.3f), px(12.5f))
+            lineTo(px(11.5f), px(14.7f))
+            lineTo(px(15.4f), px(10.0f))
+        },
+        c,
+        style = Stroke(width = w, cap = StrokeCap.Round, join = StrokeJoin.Round),
+    )
+}
+
 /**
- * 同步进行中的上传动画：外圈一段缺口圆环匀速旋转（表示「正在处理」），
- * 云朵内一支向上箭头循环上浮并淡出（表示「数据正在上传」）。
- * 铺满圆形按钮，尺寸传按钮边长即可。
+ * 云同步按钮的完整视觉，铺满圆形按钮（尺寸传按钮边长即可），三态互斥：
+ * - 已同步 [consistent] 且非同步中：无圆环 + 云内对勾；
+ * - 未同步（有改动没推）：外圈虚线圆环 + 云内静态双向箭头；
+ * - 同步中 [syncing]：外圈环形进度（匀速旋转的缺口环）+ 云内双向箭头相背流动动画。
  */
 @Composable
-fun CloudSyncUploadAnimation(
+fun CloudSyncVisual(
     size: Dp,
+    consistent: Boolean,
+    syncing: Boolean,
     tint: Color,
     modifier: Modifier = Modifier,
 ) {
-    val infinite = rememberInfiniteTransition(label = "cloudUpload")
-    val rise by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1150, easing = FastOutSlowInEasing), RepeatMode.Restart),
-        label = "arrowRise",
-    )
+    val infinite = rememberInfiniteTransition(label = "cloudSync")
     val spin by infinite.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Restart),
         label = "ringSpin",
     )
-    val breathe by infinite.animateFloat(
+    val flow by infinite.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1150, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "cloudBreathe",
+        animationSpec = infiniteRepeatable(tween(950, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        label = "arrowFlow",
     )
     Canvas(modifier.size(size)) {
         val u = this.size.minDimension / 24f
-        val cloudScale = lerp(0.82f, 0.88f, breathe)
+        val ringR = 10.6f * u
+        val cloudScale = 0.84f
+        // 内部符号比云再缩一档，双向箭头才能完整落在云腹内不顶到云边
+        val arrowScale = 0.62f
 
-        // 外圈：一段 300° 的缺口圆环匀速旋转——经典「进行中」信号，填满 54dp 也不空
-        drawArc(
-            color = tint.copy(alpha = 0.35f),
-            startAngle = spin,
-            sweepAngle = 300f,
-            useCenter = false,
-            topLeft = Offset(2.2f * u, 2.2f * u),
-            size = Size(19.6f * u, 19.6f * u),
-            style = Stroke(width = 1.7f * u, cap = StrokeCap.Round),
+        // ---- 外圈圆环：仅「未同步 / 同步中」出现，已同步完全不画 ----
+        if (syncing) {
+            // 环形进度：一段缺口环匀速旋转，经典 indeterminate 进度信号
+            drawArc(
+                color = tint,
+                startAngle = spin,
+                sweepAngle = 275f,
+                useCenter = false,
+                topLeft = Offset((12f * u) - ringR, (12f * u) - ringR),
+                size = Size(ringR * 2f, ringR * 2f),
+                style = Stroke(width = 1.9f * u, cap = StrokeCap.Round),
+            )
+        } else if (!consistent) {
+            // 虚线圆环：提醒本地有改动、等待同步
+            drawCircle(
+                color = tint.copy(alpha = 0.75f),
+                radius = ringR,
+                center = Offset(12f * u, 12f * u),
+                style = Stroke(
+                    width = 1.6f * u,
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.6f * u, 2.2f * u)),
+                ),
+            )
+        }
+
+        // ---- 云朵 ----
+        drawPath(
+            cloudPath(u, cloudScale),
+            tint,
+            style = Stroke(width = 1.7f * u, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
 
-        // 云：随呼吸轻微缩放
-        drawPath(cloudPath(u, cloudScale), tint, style = Stroke(width = 1.7f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
-
-        // 上传箭头：在云朵内部从下往上浮，头尾淡入淡出，循环往复。
-        // 注意 arrowY 是 24 网格单位，落笔前必须乘 u 换成像素，否则会漂到画布顶边。
-        val arrowY = lerp(13.8f, 10.6f, rise) * u
-        val fade = minOf((rise * 5f).coerceAtMost(1f), ((1f - rise) * 4f).coerceAtMost(1f))
-        if (fade > 0.01f) {
-            val c = tint.copy(alpha = fade)
-            val aw = 2.3f * u
-            val tipY = arrowY - 1.4f * u
-            drawLine(c, Offset(12f * u, arrowY + 1.9f * u), Offset(12f * u, tipY), aw, StrokeCap.Round)
-            drawLine(c, Offset(9.8f * u, arrowY + 0.2f * u), Offset(12f * u, tipY), aw, StrokeCap.Round)
-            drawLine(c, Offset(14.2f * u, arrowY + 0.2f * u), Offset(12f * u, tipY), aw, StrokeCap.Round)
+        // ---- 云内符号：同步中/未同步=双向箭头，已同步=对勾 ----
+        if (syncing) {
+            val e = flow
+            val fade = minOf((e * 5f).coerceAtMost(1f), ((1f - e) * 5f).coerceAtMost(1f))
+            if (fade > 0.01f) {
+                val c = tint.copy(alpha = fade)
+                // 上箭头往上、下箭头往下，相背而行后淡出重来，表现双向传输
+                drawSyncArrows(c, 1.6f * u, u, arrowScale, upShift = -1.1f * e, downShift = 1.1f * e)
+            }
+        } else if (!consistent) {
+            drawSyncArrows(tint, 1.6f * u, u, arrowScale)
+        } else {
+            // 对勾几何放大、描边收细，缩到小尺寸仍能看出「一短一长两笔」
+            drawCloudCheck(tint, 1.7f * u, u, 0.88f)
         }
     }
 }
