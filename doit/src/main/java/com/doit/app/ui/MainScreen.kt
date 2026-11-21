@@ -335,16 +335,15 @@ private fun ListHeader(state: UiState, syncing: Boolean, onFilter: (String) -> U
 
 /**
  * 今日进度左侧的云同步按钮：浅底实心圆钮 + 云同步视觉，尺寸与右侧进度环相当（54dp vs 56dp）。
- * 三态由 [CloudSyncVisual] 统一表达：
- * - 已同步 [consistent]：无圆环 + 云内对勾（主题绿）；
- * - 未同步：外圈虚线环 + 云内双向箭头（朱橘），提醒有改动待推；
- * - 同步中 [syncing]：外圈环形进度 + 云内双向箭头流动动画（主题绿），期间禁用点击防连点。
- * 按钮本身不描边，"圆环"完全交给视觉层，这样已同步态才是真正的"周边没有圆环"。
+ * 三态由 [CloudSyncVisual] 统一表达，全部使用主题绿，不再出现橙色/黄色：
+ * - 未同步：虚线圆环 + 虚线感绿色云彩；
+ * - 同步中 [syncing]：环形进度 + 浅绿云彩 + 上下双向箭头动画，期间禁用点击防连点；
+ * - 已同步 [consistent]：实色绿色云朵 + 白色对钩 + 外圈实线圆。
  */
 @Composable
 private fun CloudSyncButton(consistent: Boolean, syncing: Boolean, onClick: () -> Unit) {
-    val bg = if (consistent || syncing) Doit.AccentSoft else Doit.Surface2
-    val tint = if (consistent || syncing) Doit.AccentInk else Doit.Strike
+    val bg = Doit.AccentSoft
+    val tint = Doit.AccentInk
     Box(
         modifier = Modifier
             .size(54.dp)
