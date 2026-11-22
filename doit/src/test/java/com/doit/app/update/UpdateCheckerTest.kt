@@ -27,6 +27,31 @@ class UpdateCheckerTest {
     }
 
     @Test
+    fun `asset嵌套uploader以及URL带花括号也能解析出apk`() {
+        // 复现 GitHub 真实响应：asset 对象里嵌了 uploader 对象、URL 值里带 {/other_user} 模板花括号。
+        val release = """{
+            "tag_name": "v1.0.14",
+            "assets": [
+                {
+                    "name": "doit-aab.aab",
+                    "uploader": {"login": "x", "gists_url": "https://api.github.com/users/x/gists{/gist_id}"},
+                    "browser_download_url": "https://x/aab"
+                },
+                {
+                    "name": "doit-v1.0.14-release.apk",
+                    "uploader": {"login": "bot", "repos_url": "https://api.github.com/users/bot/repos{/owner}{/repo}"},
+                    "browser_download_url": "https://github.com/nabaonan/doit-apk/releases/download/v1.0.14/doit-v1.0.14-release.apk"
+                }
+            ],
+            "body": "last release text with {braces} and [brackets]"
+        }"""
+        assertEquals(
+            "https://github.com/nabaonan/doit-apk/releases/download/v1.0.14/doit-v1.0.14-release.apk",
+            UpdateChecker.findApkUrl(release),
+        )
+    }
+
+    @Test
     fun `远程比本地新则提示发现新版本`() {
         val (has, msg) = UpdateChecker.decide("v1.0.7", "1.0.6")
         assertTrue(has)

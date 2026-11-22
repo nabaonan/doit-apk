@@ -98,29 +98,87 @@ object UpdateChecker {
     /**
      * 从 release JSON 文本里找一个可安装的 apk 直链。
      * GitHub 会把 CI 构建的 apk 作为 release asset 上传，asset 形如：
-     *   { "name": "doit-1.0.12.apk", "browser_download_url": "https://.../doit-1.0.12.apk", ... }
-     * 用轻量字符串解析（避开 Android org.json 在单测不可用的问题）：
-     * 找 assets 数组里 name 以 .apk 结尾、且后面带 browser_download_url 的项。
+     *   { "name": "doit-1.0.12.apk", "uploader": {...}, "browser_download_url": "https://...", ... }
+     *
+     * GitHub 的 asset 对象里嵌套了 uploader 对象、URL 值里还可能出现 {/some} 等带花括号的模板，
+     * 用「\{[^{}]*\}」这种正则永远匹配不到最外层 asset 对象。这里改用逐字符扫描：
+     * 找到 assets 数组后按大括号配对切出每一个完整对象，在各自作用域内用 name + browser_download_url 正则取值，
+     * 即便对象内部嵌套也切分正确。纯字符串实现，避免 org.json 在本地单测环境不可用的问题。
      */
     internal fun findApkUrl(releaseJson: String): String? {
         val assetsStart = releaseJson.indexOf("\"assets\"")
         if (assetsStart < 0) return null
-        val start = releaseJson.indexOf('[', assetsStart)
-        val end = releaseJson.indexOf(']', start)
-        if (start < 0 || end < 0 || end <= start) return null
-        val assets = releaseJson.substring(start + 1, end)
-        // 每个 asset 是 { ... } 对象，逐个解析：name 是 .apk 且带浏览器直链就返回
-        val objRe = Regex("""\{[^{}]*\}""")
+        val arrStart = releaseJson.indexOf('[', assetsStart)
+        if (arrStart < 0) return null
+        val arrEnd = matchBrackets(releaseJson, arrStart)
+        if (arrEnd <= arrStart) return null
+        val assetsBody = releaseJson.substring(arrStart + 1, arrEnd)
         val nameRe = Regex("""\"name\"\s*:\s*\"([^\"]+)\"""")
         val urlRe = Regex("""\"browser_download_url\"\s*:\s*\"([^\"]+)\"""")
-        for (m in objRe.findAll(assets)) {
-            val obj = m.value
+        // 在 assets 数组内逐个配平切出 asset 对象，第一个 name 以 .apk 结尾且有直链的就返回
+        var cursor = assetsBody.indexOf('{')
+        while (cursor >= 0) {
+            val close = matchBraces(assetsBody, cursor)
+            if (close < 0) break
+            val obj = assetsBody.substring(cursor, close + 1)
             val name = nameRe.find(obj)?.groupValues?.get(1).orEmpty()
-            if (!name.endsWith(".apk", ignoreCase = true)) continue
-            val url = urlRe.find(obj)?.groupValues?.get(1).orEmpty()
-            if (url.isNotBlank()) return url
+            if (name.endsWith(".apk", ignoreCase = true)) {
+                val url = urlRe.find(obj)?.groupValues?.get(1).orEmpty()
+                if (url.isNotBlank()) return url
+            }
+            cursor = assetsBody.indexOf('{', close + 1)
         }
         return null
+    }
+
+    /** 从 [s] 的 [open]（必须指向 '{'）开始，返回与之配平的 '}' 下标；找不到返回 -1。 */
+    private fun matchBraces(s: String, open: Int): Int {
+        var depth = 0
+        var inString = false
+        var i = open
+        while (i < s.length) {
+            when {
+                inString -> {
+                    when (s[i]) {
+                        '\\' -> i++               // 跳过转义字符
+                        '"' -> inString = false
+                    }
+                }
+                s[i] == '"' -> inString = true
+                s[i] == '{' -> depth++
+                s[i] == '}' -> {
+                    depth--
+                    if (depth == 0) return i
+                }
+            }
+            i++
+        }
+        return -1
+    }
+
+    /** 从 [s] 的 [open]（必须指向 '['）开始，返回与之配平的 ']' 下标；找不到返回 -1。 */
+    private fun matchBrackets(s: String, open: Int): Int {
+        var depth = 0
+        var inString = false
+        var i = open
+        while (i < s.length) {
+            when {
+                inString -> {
+                    when (s[i]) {
+                        '\\' -> i++
+                        '"' -> inString = false
+                    }
+                }
+                s[i] == '"' -> inString = true
+                s[i] == '[' -> depth++
+                s[i] == ']' -> {
+                    depth--
+                    if (depth == 0) return i
+                }
+            }
+            i++
+        }
+        return -1
     }
 
     /**
