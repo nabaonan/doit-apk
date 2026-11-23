@@ -260,12 +260,11 @@ fun ProgressRing(done: Int, total: Int, modifier: Modifier = Modifier, size: Dp 
 /** 滑动进度层：三套皮肤共用同一套位移，只换视觉 */
 @Composable
 fun FillLayer(skin: FlowSkin, modifier: Modifier = Modifier) {
-    // 深色下填充本身就是深色，白色高光要压得很低，否则像开了手电
-    val sheen = if (Doit.IsDark) 0.14f else 0.42f
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         if (w <= 0f) return@Canvas
+        // 纯渐变底色：不做斜纹/浪光/火星等装饰，进度条保持干净的背景色填充
         drawRect(
             brush = Brush.horizontalGradient(
                 0f to skin.fillStart,
@@ -275,65 +274,6 @@ fun FillLayer(skin: FlowSkin, modifier: Modifier = Modifier) {
                 endX = w.coerceAtLeast(1f),
             ),
         )
-        when (skin) {
-            FlowSkin.GREEN -> {
-                // 极淡斜纹：进度看起来像在生长
-                var x = -h
-                while (x < w + h) {
-                    drawLine(
-                        color = Color.White.copy(alpha = sheen),
-                        start = Offset(x, 0f),
-                        end = Offset(x + h * 0.42f, h),
-                        strokeWidth = 2.dp.toPx(),
-                    )
-                    x += 15.dp.toPx()
-                }
-            }
-
-            FlowSkin.WATER -> {
-                var x = -h
-                while (x < w + h) {
-                    drawLine(
-                        color = Color.White.copy(alpha = sheen),
-                        start = Offset(x, 0f),
-                        end = Offset(x + h * 0.55f, h),
-                        strokeWidth = 4.dp.toPx(),
-                    )
-                    x += 24.dp.toPx()
-                }
-                // 前端浪光
-                drawRect(
-                    brush = Brush.horizontalGradient(
-                        0.7f to Color.Transparent,
-                        1f to Color.White.copy(alpha = if (Doit.IsDark) 0.20f else 0.55f),
-                        startX = 0f,
-                        endX = w.coerceAtLeast(1f),
-                    ),
-                )
-            }
-
-            FlowSkin.SPARK -> {
-                // 火星四溅
-                val sparks = listOf(
-                    0.80f to 0.26f, 0.91f to 0.58f, 0.73f to 0.76f, 0.96f to 0.20f, 0.86f to 0.88f,
-                )
-                sparks.forEachIndexed { i, (fx, fy) ->
-                    drawCircle(
-                        color = if (i % 2 == 0) Color(0xFFFFFBE8) else Color(0xFFFFD479),
-                        radius = if (i % 2 == 0) 1.5.dp.toPx() else 1.1.dp.toPx(),
-                        center = Offset(w * fx, h * fy),
-                    )
-                }
-                drawRect(
-                    brush = Brush.horizontalGradient(
-                        0.75f to Color.Transparent,
-                        1f to Color(0xFFFFD678).copy(alpha = 0.75f),
-                        startX = 0f,
-                        endX = w.coerceAtLeast(1f),
-                    ),
-                )
-            }
-        }
     }
 }
 
