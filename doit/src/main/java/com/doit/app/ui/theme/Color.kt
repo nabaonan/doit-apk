@@ -378,15 +378,20 @@ enum class Priority(val level: Int, val key: String, val label: String, val colo
     }
 }
 
-/** 分类配色：新分类从色板里按顺序取色（薄荷绿打头，整体清爽） */
+/**
+ * 分类内置色板 —— 与桌面端 doit-desktop constants/tokens.ts 的 CATEGORY_SWATCHES 严格一致，
+ * 两端必须同步修改，否则同一个分类会在两端显示成不同颜色。
+ * 统一用带 # 的 #RRGGBB 存储/同步（桌面端 CSS 必须要 #；parseHex 两种格式都兼容）。
+ * 薄荷绿打头，整体清新。
+ */
 val PaletteColors = listOf(
-    "#3FBB9C", "#5B9BD5", "#C9A24D", "#9186C9",
-    "#2BB89A", "#E0857A", "#5A7F95", "#64B0C9",
+    "#34C7A8", "#5AA9E6", "#F2A65A", "#A78BFA",
+    "#22B8CF", "#F08A8A", "#AACB5E", "#7C96B0",
 )
 
 fun parseHex(hex: String): Color = runCatching {
     Color(android.graphics.Color.parseColor(if (hex.startsWith("#")) hex else "#$hex"))
-}.getOrDefault(Color(0xFF3FBB9C))
+}.getOrDefault(Color(0xFF34C7A8))
 
 /** 热力图 5 阶绿色（深浅两套，随调色板切换；最深一阶与主色同源） */
 private val HeatLight = listOf(

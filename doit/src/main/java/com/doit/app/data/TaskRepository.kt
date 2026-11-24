@@ -7,10 +7,10 @@ import androidx.room.withTransaction
 object SeedData {
 
     val categories = listOf(
-        CategoryEntity("工作", "#5B9BD5", 0),
-        CategoryEntity("采购", "#C9A24D", 1),
-        CategoryEntity("阅读", "#9186C9", 2),
-        CategoryEntity("运动", "#4E9BB8", 3),
+        CategoryEntity("工作", "#5AA9E6", 0),
+        CategoryEntity("采购", "#F2A65A", 1),
+        CategoryEntity("阅读", "#A78BFA", 2),
+        CategoryEntity("运动", "#22B8CF", 3),
     )
 
     data class Seed(
@@ -337,14 +337,17 @@ class TaskRepository(private val db: DoitDatabase) {
         }
         val alive = categoryDao.all()
         val color = com.doit.app.ui.theme.PaletteColors[alive.size % com.doit.app.ui.theme.PaletteColors.size]
+        // 统一带 # 存储，与桌面端色板值格式一致，保证同步后两端能按同一字符串回显/比对
         categoryDao.upsert(
-            CategoryEntity(trimmed, color.removePrefix("#"), alive.size, updatedAt = nowMs()),
+            CategoryEntity(trimmed, color, alive.size, updatedAt = nowMs()),
         )
     }
 
     suspend fun setCategoryColor(name: String, hex: String) {
         val target = categoryDao.all().firstOrNull { it.name == name } ?: return
-        categoryDao.upsert(target.copy(colorHex = hex.removePrefix("#"), updatedAt = nowMs()))
+        // 统一带 # 存储（入参可能是历史不带 # 的值，这里补上），与桌面端色板格式一致
+        val normalized = if (hex.startsWith("#")) hex else "#$hex"
+        categoryDao.upsert(target.copy(colorHex = normalized, updatedAt = nowMs()))
     }
 
     /**
