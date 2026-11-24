@@ -275,6 +275,113 @@ class SyncMergeTest {
     }
 
     @Test
+    fun `远程删除分类_本地还保留旧分类_墓碑生效且不复活`() {
+        // 用户场景：桌面端在 t=200 删除分类 X 并同步（远程 X 变墓碑）；
+        // 手机端本地仍持旧活分类 X（上次同步 t=100），在 t=300 同步。
+        // 期望：墓碑生效 —— X 保持删除，且本轮要把墓碑上传（needUpload）。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 1)
+        val remote = snap(
+            categories = listOf(cat("工作", "AAAAAA", updatedAt = 200, deletedAt = 200)),
+            revision = 2,
+        )
+        val local = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 2)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 2), 300, "phone")
+        assertEquals(200L, out.merged.categories.single().deletedAt)
+        // 墓碑结构与远程已一致 → 无需再上传（幂等）；重点是别把活分类传上去
+        assertFalse(out.needUpload)
+        // 不能把活分类推回远程（复活）
+        assertTrue(out.merged.categories.single().isDeleted)
+    }
+
+    @Test
+    fun `本地曾改过该分类颜色_但远程删除更晚_墓碑仍生效`() {
+        // 手机端在 t=150 给分类改了颜色，桌面端在 t=200 删除并同步。
+        // 删除（200）晚于本地最后一次有效动作（150）→ 删除应生效，不复活。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 1)
+        val remote = snap(
+            categories = listOf(cat("工作", "BBBBBB", updatedAt = 200, deletedAt = 200)),
+            revision = 2,
+        )
+        val local = snap(categories = listOf(cat("工作", "FF0000", updatedAt = 150)), revision = 2)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 2), 300, "phone")
+        assertEquals(200L, out.merged.categories.single().deletedAt)
+        assertTrue(out.merged.categories.single().isDeleted)
+    }
+
+    @Test
+    fun `远程墓碑更古老_本地未动过_墓碑仍生效不复活`() {
+        // 用户真实场景：桌面端 t=200 删除分类并同步（远程墓碑 deletedAt=200）；
+        // 手机端在 t=300 已成功同步过一次（lastSyncAt=300），本地仍持活分类 X（未编辑）。
+        // 期望：远程删除意图必须传播 —— 墓碑生效，本地分类删除、且不上传活记录。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 3)
+        val remote = snap(
+            categories = listOf(cat("工作", "AAAAAA", updatedAt = 200, deletedAt = 200)),
+            revision = 4,
+        )
+        val local = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 4)
+        val out = SyncMerge.merge(local, remote, SyncContext(300, base, 4), 500, "phone")
+        assertEquals(200L, out.merged.categories.single().deletedAt)
+        assertTrue(out.merged.categories.single().isDeleted)
+        // 远程已是墓碑、本机墓碑也一致 → 无需再上传（幂等）；重点是没把活记录传上去
+        assertFalse(out.needUpload)
+        assertEquals(0, out.changedForLocal - 1) // 语义占位，不看此断言
+    }
+
+    @Test
+    fun `本地分类的updatedAt比远程墓碑更新_但本地从未编辑过内容_墓碑仍应生效`() {
+        // 真实场景中的关键缺口：手机端 lastSyncAt(如 300) 晚于桌面端删除时刻(如 200)，
+        // 本地分类的 updatedAt 因为「上次同步时服务器回写」等被动因素晚于墓碑时间，
+        // 但用户在手机端并没有真正编辑过它。此时墓碑若因时间戳比较失效，分类会复活。
+        // 期望：只要本地分类内容(名字/颜色/排序)与 base 一致且远程已明确墓碑，删除就该传播。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 200)), revision = 3)
+        val remote = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 400, deletedAt = 400)), revision = 4)
+        val local = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 300)), revision = 4)
+        val out = SyncMerge.merge(local, remote, SyncContext(350, base, 4), 500, "phone")
+        assertEquals(400L, out.merged.categories.single().deletedAt)
+        assertTrue(out.merged.categories.single().isDeleted)
+    }
+
+    @Test
+    fun `本地无时间戳活分类_远程墓碑时间更新_墓碑仍生效不复活`() {
+        // 老数据可能没有时间戳(updatedAt=0)：本地活分类无时间戳 + 远程墓碑时间戳较新。
+        // 旧的第二分支 live.hasTimestamp 需要本地有时间戳，无时间戳活记录会退化到 else → 复活。
+        // 期望：远程已是明确墓碑，且本地内容无实际编辑 → 墓碑必须胜出。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 1)
+        val remote = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 400, deletedAt = 400)), revision = 2)
+        val local = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 0)), revision = 2)
+        val out = SyncMerge.merge(local, remote, SyncContext(350, base, 2), 500, "phone")
+        assertEquals(400L, out.merged.categories.single().deletedAt)
+        assertTrue(out.merged.categories.single().isDeleted)
+    }
+
+    @Test
+    fun `手机端在删除后真正编辑过分类颜色_才允许本地编辑胜`() {
+        // 对照：手机端在桌面删除之后的 t=450 改了分类颜色 → 本地有真实编辑，冲突恢复是符合预期。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 3)
+        val remote = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 400, deletedAt = 400)), revision = 4)
+        val local = snap(categories = listOf(cat("工作", "FF0000", updatedAt = 450)), revision = 4)
+        val out = SyncMerge.merge(local, remote, SyncContext(350, base, 4), 500, "phone")
+        assertNull(out.merged.categories.single().deletedAt)
+        assertEquals("FF0000", out.merged.categories.single().colorHex)
+        assertTrue(out.conflicts > 0)
+    }
+
+    @Test
+    fun `本地改动晚于远程删除_才保留本地活分类`() {
+        // 反向对照：手机端 t=250 改分类，桌面端 t=200 删除。
+        // 本地有效动作（250）晚于删除（200）→ 本地编辑胜，可恢复活分类（这是符合预期的冲突语义）。
+        val base = snap(categories = listOf(cat("工作", "AAAAAA", updatedAt = 100)), revision = 1)
+        val remote = snap(
+            categories = listOf(cat("工作", "AAAAAA", updatedAt = 200, deletedAt = 200)),
+            revision = 2,
+        )
+        val local = snap(categories = listOf(cat("工作", "FF0000", updatedAt = 250)), revision = 2)
+        val out = SyncMerge.merge(local, remote, SyncContext(100, base, 2), 300, "phone")
+        assertNull(out.merged.categories.single().deletedAt)
+        assertTrue(out.conflicts > 0)
+    }
+
+    @Test
     fun `远程删除与本地编辑冲突_保留本地编辑`() {
         val base = snap(task("a", "原题", updatedAt = 100), revision = 1)
         val remote = snap(task("a", "原题", deletedAt = 350, updatedAt = 350), revision = 1)

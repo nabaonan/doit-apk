@@ -271,20 +271,26 @@ object SyncMerge {
         val lDel = l.deletedAt
         val rDel = r.deletedAt
         if (lDel == null && rDel == null) return mergeCategoryFields(l, r, b, lastSyncAt)
-        if (lDel != null && rDel != null) return (if (lDel >= rDel) l else r) to 0
+        if (lDel != null && rDel != null) {
+            // 两边都是墓碑：保留删除，取较新的墓碑时间戳（其它字段取较新侧，保证颜色/排序不回退）
+            val newer = if (lDel >= rDel) l else r
+            return newer.copy(updatedAt = maxOf(l.updatedAt, r.updatedAt)) to 0
+        }
 
         val dead = if (lDel != null) l else r
         val live = if (lDel != null) r else l
         val deadAt = dead.deletedAt!!
-        val liveEditedSinceSync = when {
-            b != null -> b.isDeleted || live.content() != b.content()
-            else -> live.effectiveTime > lastSyncAt
-        }
-        val deletedSinceSync = lastSyncAt > 0L && deadAt > lastSyncAt
+        // 「本地是否真的编辑过该分类」—— 只看用户可见内容（名称/颜色/排序）相对 base 有没有变化。
+        // 刻意排除 updatedAt / deletedAt：服务端回写或上次同步落库会刷 updatedAt，
+        // 但它不代表用户在手机端有编辑，不能因为时间戳"看着新"就把已删分类复活。
+        // 有 base 就严格比内容；没有 base（首次/基线丢失）无法证伪本地编辑，保守让删除传播。
+        val liveEditedSinceSync = b?.let { live.visibleContent() != it.visibleContent() } ?: false
         val deleteWins = when {
-            !liveEditedSinceSync && deletedSinceSync -> true
-            live.hasTimestamp && deadAt > live.effectiveTime -> true
-            else -> false
+            // 本地从未编辑过 → 删除意图必须传播（不复活），无论时间戳怎么倒挂
+            !liveEditedSinceSync -> true
+            // 本地编辑晚于删除 → 编辑胜（合理冲突）；编辑早于删除 → 删除晚，仍应删
+            live.effectiveTime > deadAt -> false
+            else -> true
         }
         if (deleteWins) {
             return dead.copy(
@@ -294,6 +300,11 @@ object SyncMerge {
         }
         val survivor = if (l.isDeleted) r else l
         return survivor.copy(deletedAt = null, updatedAt = maxOf(l.updatedAt, r.updatedAt)) to 1
+    }
+
+    /** 用户可见的内容指纹：名称 / 颜色 / 排序，不含时间戳与删除标记。 */
+    private fun SyncCategory.visibleContent(): String = buildString {
+        field(name); field(colorHex); field(sortOrder)
     }
 
     private fun mergeCategoryFields(
