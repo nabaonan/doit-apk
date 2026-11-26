@@ -4,6 +4,9 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 /**
@@ -103,6 +106,21 @@ fun buildTree(tasks: List<TaskEntity>): List<TaskNode> {
  */
 fun sortTopByPriority(nodes: List<TaskNode>, enabled: Boolean): List<TaskNode> =
     if (enabled) nodes.sortedWith(compareByDescending<TaskNode> { it.task.priority }) else nodes
+
+/**
+ * 首页「今日待办」顶级任务展示判定（四端口径一致）：
+ * - 未整体完成（顶级自己没勾，或子任务没全做完）→ 始终展示；
+ * - 整体完成 → 只有完成日期是传入的 [today] 才留下；今天之前完成 / 完成时间缺失 / 异常日期 → 归档隐藏。
+ * 只作用于顶级任务，子任务不过滤；传不同 [today] 即可在跨午夜后由上层重算刷新。
+ */
+fun showInToday(node: TaskNode, today: LocalDate): Boolean {
+    val fullyDone = node.task.done && (!node.hasChildren || node.allChildrenDone)
+    if (!fullyDone) return true
+    val completedDate = node.task.completedAt?.let {
+        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+    }
+    return completedDate == today
+}
 
 /** 拍平成一维，方便统计与批量操作 */
 fun flatten(nodes: List<TaskNode>): List<TaskNode> = nodes.flatMap { listOf(it) + flatten(it.children) }

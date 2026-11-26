@@ -15,6 +15,7 @@ import com.doit.app.data.TaskNode
 import com.doit.app.data.TaskRepository
 import com.doit.app.data.TaskEntity
 import com.doit.app.data.buildTree
+import com.doit.app.data.showInToday
 import com.doit.app.data.sortTopByPriority
 import com.doit.app.sync.DavUrl
 import com.doit.app.sync.SnapshotCodec
@@ -38,9 +39,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 enum class Page { List, Stats, Settings, Calendar }
 
@@ -117,6 +116,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _toast = MutableSharedFlow<String>(extraBufferCapacity = 8)
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     private val _syncing = MutableStateFlow(false)
+    /** 今日刷新信号：每次 +1 让 uiState 的 combine 重算，重新取 LocalDate.now() 跑 showInToday。
+     *  只在「回到前台 / 下拉刷新」时触发，不发网络、不开定时器，跨午夜纠正显示用。 */
+    private val _todayTick = MutableStateFlow(0)
 
     val page: StateFlow<Page> = _page
     val sheet: StateFlow<Sheet?> = _sheet
@@ -139,7 +141,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.categories,
         settingsRepo.settings,
         _filter,
-        combine(repo.logs, repo.doneTasks, repo.allTasksSync, repo.allCategoriesSync) { l, d, at, ac ->
+        // 把 _todayTick 塞进内层合成流：回前台/下拉时 tick +1 → 内层重新发射 → 外层整条链重算，
+        // 于是下面的 LocalDate.now() 与 showInToday 都会用「今天」重新判定，跨午夜纠正显示。
+        combine(
+            repo.logs,
+            repo.doneTasks,
+            repo.allTasksSync,
+            repo.allCategoriesSync,
+            _todayTick,
+        ) { l, d, at, ac, _ ->
             SyncBundle(l, d, at, ac)
         },
     ) { tasks, categories, settings, filter, bundle ->
@@ -220,6 +230,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setFilter(filter: String) {
         _filter.value = filter
+    }
+
+    /** 回到前台 / 下拉刷新时调用：触发 uiState 重算，用最新 LocalDate 重跑今日过滤。
+     *  纯本地信号，不发网络、不开定时器，不耗电；同步仍走单独的云同步按钮。 */
+    fun refreshToday() {
+        _todayTick.update { it + 1 }
     }
 
     /** 紧急优先开关：只影响展示，立即持久化到本地设置，不写待办快照 */
@@ -489,20 +505,4 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun clearVoiceDraft() {
         voiceDraft = null
     }
-}
-
-/**
- * 首页「今日待办」的顶级任务展示判定：
- * - 未整体完成（顶级任务自己没勾上，或其子任务没全做完）→ 始终展示。
- * - 整体完成（顶级任务 + 全部子任务都完成）→ 只有完成日期是「今天」才留在今日待办；
- *   完成于今天之前（或完成时间缺失 / 异常日期）的都从首页移除，历史完成记录只看月视图。
- * 只作用于顶级任务，子任务不做单独过滤，因此凡是展示的顶级任务其全部子任务都会完整带出。
- */
-private fun showInToday(node: TaskNode, today: LocalDate): Boolean {
-    val fullyDone = node.task.done && (!node.hasChildren || node.allChildrenDone)
-    if (!fullyDone) return true
-    val completedDate = node.task.completedAt?.let {
-        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
-    }
-    return completedDate == today
 }

@@ -26,7 +26,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +44,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.doit.app.data.TaskNode
 import com.doit.app.ui.components.Breather
@@ -64,6 +68,7 @@ import java.time.LocalDate
 
 private val WEEKDAYS_CN = listOf("一", "二", "三", "四", "五", "六", "日")
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(vm: MainViewModel) {
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -75,6 +80,23 @@ fun MainScreen(vm: MainViewModel) {
 
     var menuOpen by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
+    // 下拉刷新的短暂转圈：refreshToday() 是瞬时的，这里只维持一个最小可见时长，
+    // 让手势有反馈；不发网络、不开定时器（一次性 delay，用完即止）。
+    var pulling by remember { mutableStateOf(false) }
+
+    // 从后台回到前台时重算「今天」：跨午夜后昨天完成的任务会在这里被过滤掉。
+    // 只在生命周期事件触发，不轮询、不耗电；同步仍走单独的云同步按钮。
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        vm.refreshToday()
+    }
+
+    // 下拉转圈的最小可见时长，一次性 delay 后立即复位，不循环。
+    LaunchedEffect(pulling) {
+        if (pulling) {
+            delay(600)
+            pulling = false
+        }
+    }
 
     // 侧滑 / 返回键：子页面（统计、设置）只退回到首页，不退出应用。
     // 弹层开着时交给 SheetHost 自己的返回处理（它注册在后，优先级更高），先关弹层。
@@ -125,31 +147,42 @@ fun MainScreen(vm: MainViewModel) {
                 onSync = { vm.syncDav(state.settings.davUrl, state.settings.davUser, state.settings.davPass) },
                 onToggleSort = vm::toggleSortByPriority,
             )
-            LazyColumn(
+            PullToRefreshBox(
+                isRefreshing = pulling,
+                onRefresh = {
+                    // 下拉只重算今日过滤（跨午夜纠正），不触发云同步、不发网络；
+                    // 一次性 delay 给手势一个最小可见的转圈反馈，用完即止无轮询开销。
+                    pulling = true
+                    vm.refreshToday()
+                },
                 modifier = Modifier.fillMaxSize(),
-                state = listState,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 24.dp, end = 24.dp, top = 12.dp, bottom = 150.dp,
-                ),
             ) {
-                items(state.nodes, key = { it.task.id }) { node ->
-                    TopTaskRow(
-                        node = node,
-                        skin = state.skin,
-                        haptics = haptics,
-                        cb = callbacks,
-                        expand = vm.expand,
-                        showCategory = state.filter == "all",
-                        // 切分类时列表跟着淡入淡出 / 归位，而不是"啪"地换一批卡片
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = tween(220),
-                            fadeOutSpec = tween(160),
-                            placementSpec = spring(stiffness = 700f, dampingRatio = 0.9f),
-                        ),
-                    )
-                }
-                if (state.done > 0) {
-                    item("breather") { Breather(completedCount = state.done) }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 24.dp, end = 24.dp, top = 12.dp, bottom = 150.dp,
+                    ),
+                ) {
+                    items(state.nodes, key = { it.task.id }) { node ->
+                        TopTaskRow(
+                            node = node,
+                            skin = state.skin,
+                            haptics = haptics,
+                            cb = callbacks,
+                            expand = vm.expand,
+                            showCategory = state.filter == "all",
+                            // 切分类时列表跟着淡入淡出 / 归位，而不是"啪"地换一批卡片
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = tween(220),
+                                fadeOutSpec = tween(160),
+                                placementSpec = spring(stiffness = 700f, dampingRatio = 0.9f),
+                            ),
+                        )
+                    }
+                    if (state.done > 0) {
+                        item("breather") { Breather(completedCount = state.done) }
+                    }
                 }
             }
         }

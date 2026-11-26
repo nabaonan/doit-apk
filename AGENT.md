@@ -119,6 +119,8 @@
 ## 5. 关键业务口径
 
 - **今日待办**：只算顶级任务；未完成或今日完成才显示；`todayTotal/todayDone` 是右上角进度环口径，与分类筛选解耦；副标题「还有 N 件事」按当前可见列表。`sortTopByPriority()` 只在 `visible` 上做稳定降序（4→0），子任务顺序与引用不动；开关写 `AppSettings.sortByPriority`（DataStore），不进同步快照
+- **跨午夜刷新（无定时器，省电）**：今日过滤纯函数 `showInToday(node, today)` 在 `data/Models.kt`，传不同 `today` 即可重判。`MainViewModel._todayTick` 并入 `uiState` 内层 combine，`refreshToday()` 令其 +1 触发整条链用最新 `LocalDate.now()` 重跑过滤。两个触发点都在 `MainScreen`：`LifecycleEventEffect(ON_RESUME)` 回前台自动刷新、`PullToRefreshBox` 下拉刷新（Material3 1.3.1 实验 API，已 OptIn）；下拉只重算显示、不发网络、不触发云同步，`pulling` 一次性 delay(600ms) 给转圈反馈。别加轮询定时器——同步仍走单独云同步按钮
+
 - **云同步按钮三态**：未同步=橘黄云 + 白上箭头；同步中=绿云 + 白上箭头往复动画 + 旋转进度环（禁用点击）；已同步=绿云 + 白对钩。`CloudSyncVisual` 的橘色取自 `ActionColors.Priority`，与桌面端 `--warn` 同语义
 - **完成规则**：叶子任务才可勾选 / 右滑完成；所有有效子任务完成 → 父任务逐级 `recalcUp()` 自动完成；完成写 `CompletionLog`。删除子任务后同样要 `recalcUp()`（墓碑已被 `childrenOf` 排除），同步 `applyMerged()` 末尾跑 `recalcAllParents()`（不写日志）自愈其它端来的脏完成态
 - **优先级**：`0 不设 / 1 低 #4FBF9E / 2 普通 #4A86D6 / 3 高 #E08A34 / 4 紧急 #DE5B55`；选择器从高到低 + 末尾「不设」；新建默认普通(2)；0 不渲染标签

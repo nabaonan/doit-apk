@@ -5,6 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 class TaskTreeTest {
 
@@ -79,6 +81,50 @@ class TaskTreeTest {
         val unchanged = sortTopByPriority(tree, false)
         assertEquals(listOf("低", "紧急"), unchanged.map { it.task.title })
         assertSame(tree, unchanged)
+    }
+
+    private fun completedAtOn(day: LocalDate): Long =
+        day.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    @Test
+    fun `今日待办只显示未完成或今天完成的顶级任务`() {
+        val today = LocalDate.of(2026, 11, 27)
+        val yesterday = today.minusDays(1)
+        val node = { id: Long, done: Boolean, at: Long? ->
+            buildTree(listOf(task(id, null, "t$id", done = done).copy(completedAt = at))).first()
+        }
+        // 未完成始终显示
+        assertTrue(showInToday(node(1, false, null), today))
+        // 今天完成显示
+        assertTrue(showInToday(node(2, true, completedAtOn(today)), today))
+        // 昨天完成隐藏（跨午夜刷新后不再出现在今日）
+        assertFalse(showInToday(node(3, true, completedAtOn(yesterday)), today))
+        // 完成时间缺失隐藏
+        assertFalse(showInToday(node(4, true, null), today))
+    }
+
+    @Test
+    fun `跨午夜后同一任务从显示变为隐藏`() {
+        val day1 = LocalDate.of(2026, 11, 26)
+        val day2 = day1.plusDays(1)
+        val finished = buildTree(
+            listOf(task(9, null, "昨天的任务", done = true).copy(completedAt = completedAtOn(day1))),
+        ).first()
+        assertTrue(showInToday(finished, day1))
+        assertFalse(showInToday(finished, day2))
+    }
+
+    @Test
+    fun `子任务未全做完的父任务即使勾上也照常显示`() {
+        val today = LocalDate.of(2026, 11, 27)
+        val parent = buildTree(
+            listOf(
+                task(1, null, "父", done = true).copy(completedAt = completedAtOn(today.minusDays(3))),
+                task(2, 1, "未完成的子任务", done = false),
+            ),
+        ).first()
+        // 父任务自己勾了但子任务没全做完 → 未整体完成，旧完成时间不该把它隐藏
+        assertTrue(showInToday(parent, today))
     }
 
     @Test
