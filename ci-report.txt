@@ -1,0 +1,175 @@
+run_number: 28
+ref: refs/tags/v1.0.18
+sha: c62e4097f9bbe5b38dcadeb0fd73aa154b6b8eaa
+status: success
+----------------------------------------
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: testDebugUnitTest
+
+> Configure project :doit
+doit 版本：1.0.18 (10018) 来自 tag v1.0.18
+⚠ 未找到 release 签名密钥，正式包将使用 debug 证书签名（仅临时出包，不可升级安装）
+
+> Task :doit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :doit:preBuild UP-TO-DATE
+> Task :doit:preDebugBuild UP-TO-DATE
+> Task :doit:preDebugUnitTestBuild UP-TO-DATE
+> Task :doit:createDebugCompatibleScreenManifests
+> Task :doit:generateDebugResValues
+> Task :doit:generateDebugBuildConfig
+> Task :doit:generateDebugResources
+> Task :doit:javaPreCompileDebug
+> Task :doit:packageDebugResources
+> Task :doit:parseDebugLocalResources
+> Task :doit:checkDebugAarMetadata
+> Task :doit:extractDeepLinksDebug
+> Task :doit:javaPreCompileDebugUnitTest
+> Task :doit:mapDebugSourceSetPaths
+> Task :doit:processDebugMainManifest
+> Task :doit:processDebugManifest
+> Task :doit:processDebugManifestForPackage
+> Task :doit:mergeDebugResources
+> Task :doit:processDebugResources
+> Task :doit:kspDebugKotlin
+
+> Task :doit:compileDebugKotlin
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:124:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:128:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:130:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:132:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:144:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:148:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:150:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:152:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:203:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:205:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:259:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:261:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+
+> Task :doit:processDebugJavaRes
+> Task :doit:compileDebugJavaWithJavac
+> Task :doit:bundleDebugClassesToCompileJar
+> Task :doit:bundleDebugClassesToRuntimeJar
+> Task :doit:kspDebugUnitTestKotlin
+> Task :doit:compileDebugUnitTestKotlin
+> Task :doit:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :doit:processDebugUnitTestJavaRes
+> Task :doit:testDebugUnitTest
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1795712493402.json
+
+BUILD SUCCESSFUL in 1m
+26 actionable tasks: 26 executed
+Configuration cache entry stored.
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: lintDebug
+
+> Configure project :doit
+doit 版本：1.0.18 (10018) 来自 tag v1.0.18
+⚠ 未找到 release 签名密钥，正式包将使用 debug 证书签名（仅临时出包，不可升级安装）
+
+> Task :doit:preBuild UP-TO-DATE
+> Task :doit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :doit:preDebugBuild UP-TO-DATE
+> Task :doit:generateDebugResValues UP-TO-DATE
+> Task :doit:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :doit:generateDebugBuildConfig UP-TO-DATE
+> Task :doit:extractDeepLinksDebug UP-TO-DATE
+> Task :doit:generateDebugResources UP-TO-DATE
+> Task :doit:mapDebugSourceSetPaths UP-TO-DATE
+> Task :doit:checkDebugAarMetadata UP-TO-DATE
+> Task :doit:packageDebugResources UP-TO-DATE
+> Task :doit:mergeDebugResources UP-TO-DATE
+> Task :doit:preDebugAndroidTestBuild SKIPPED
+> Task :doit:javaPreCompileDebug UP-TO-DATE
+> Task :doit:parseDebugLocalResources UP-TO-DATE
+> Task :doit:preDebugUnitTestBuild UP-TO-DATE
+> Task :doit:processDebugMainManifest UP-TO-DATE
+> Task :doit:processDebugManifest UP-TO-DATE
+> Task :doit:processDebugManifestForPackage UP-TO-DATE
+> Task :doit:generateDebugAndroidTestResValues FROM-CACHE
+> Task :doit:extractProguardFiles
+> Task :doit:processDebugResources UP-TO-DATE
+> Task :doit:kspDebugKotlin UP-TO-DATE
+> Task :doit:compileDebugKotlin UP-TO-DATE
+> Task :doit:compileDebugJavaWithJavac UP-TO-DATE
+> Task :doit:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :doit:generateDebugLintReportModel
+> Task :doit:generateDebugUnitTestLintModel
+> Task :doit:generateDebugAndroidTestLintModel
+> Task :doit:lintAnalyzeDebugAndroidTest
+> Task :doit:lintAnalyzeDebugUnitTest
+> Task :doit:lintAnalyzeDebug
+
+> Task :doit:lintReportDebug
+Wrote HTML report to file:///home/runner/work/doit-apk/doit-apk/doit/build/reports/lint-results-debug.html
+
+> Task :doit:lintDebug
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1795712553897.json
+
+BUILD SUCCESSFUL in 49s
+29 actionable tasks: 9 executed, 1 from cache, 19 up-to-date
+Configuration cache entry stored.
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: assembleDebug
+
+> Configure project :doit
+doit 版本：1.0.18 (10018) 来自 tag v1.0.18
+⚠ 未找到 release 签名密钥，正式包将使用 debug 证书签名（仅临时出包，不可升级安装）
+
+> Task :doit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :doit:preBuild UP-TO-DATE
+> Task :doit:preDebugBuild UP-TO-DATE
+> Task :doit:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :doit:generateDebugResValues UP-TO-DATE
+> Task :doit:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :doit:generateDebugBuildConfig UP-TO-DATE
+> Task :doit:extractDeepLinksDebug UP-TO-DATE
+> Task :doit:generateDebugResources UP-TO-DATE
+> Task :doit:checkDebugAarMetadata UP-TO-DATE
+> Task :doit:mapDebugSourceSetPaths UP-TO-DATE
+> Task :doit:mergeDebugResources UP-TO-DATE
+> Task :doit:packageDebugResources UP-TO-DATE
+> Task :doit:javaPreCompileDebug UP-TO-DATE
+> Task :doit:parseDebugLocalResources UP-TO-DATE
+> Task :doit:processDebugMainManifest UP-TO-DATE
+> Task :doit:processDebugManifest UP-TO-DATE
+> Task :doit:processDebugManifestForPackage UP-TO-DATE
+> Task :doit:desugarDebugFileDependencies
+> Task :doit:mergeDebugJniLibFolders
+> Task :doit:mergeDebugShaders
+> Task :doit:compileDebugShaders NO-SOURCE
+> Task :doit:generateDebugAssets UP-TO-DATE
+> Task :doit:mergeDebugAssets
+> Task :doit:processDebugResources UP-TO-DATE
+> Task :doit:checkDebugDuplicateClasses
+> Task :doit:compressDebugAssets
+> Task :doit:mergeDebugNativeLibs
+
+> Task :doit:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so.
+
+> Task :doit:validateSigningDebug
+> Task :doit:writeDebugAppMetadata
+> Task :doit:writeDebugSigningConfigVersions
+> Task :doit:kspDebugKotlin
+> Task :doit:mergeExtDexDebug
+> Task :doit:mergeLibDexDebug
+> Task :doit:kspDebugKotlin UP-TO-DATE
+> Task :doit:compileDebugKotlin UP-TO-DATE
+> Task :doit:compileDebugJavaWithJavac UP-TO-DATE
+> Task :doit:processDebugJavaRes UP-TO-DATE
+> Task :doit:dexBuilderDebug
+> Task :doit:mergeDebugJavaResource
+> Task :doit:mergeProjectDexDebug
+> Task :doit:mergeDebugGlobalSynthetics
+> Task :doit:packageDebug
+> Task :doit:assembleDebug
+> Task :doit:createDebugApkListingFileRedirect
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1795712603693.json
+
+BUILD SUCCESSFUL in 1m 12s
+38 actionable tasks: 19 executed, 19 up-to-date
+Configuration cache entry stored.
