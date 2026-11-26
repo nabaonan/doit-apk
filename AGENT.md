@@ -118,7 +118,8 @@
 
 ## 5. 关键业务口径
 
-- **今日待办**：只算顶级任务；未完成或今日完成才显示；`todayTotal/todayDone` 是右上角进度环口径，与分类筛选解耦；副标题「还有 N 件事」按当前可见列表
+- **今日待办**：只算顶级任务；未完成或今日完成才显示；`todayTotal/todayDone` 是右上角进度环口径，与分类筛选解耦；副标题「还有 N 件事」按当前可见列表。`sortTopByPriority()` 只在 `visible` 上做稳定降序（4→0），子任务顺序与引用不动；开关写 `AppSettings.sortByPriority`（DataStore），不进同步快照
+- **云同步按钮三态**：未同步=橘黄云 + 白上箭头；同步中=绿云 + 白上箭头往复动画 + 旋转进度环（禁用点击）；已同步=绿云 + 白对钩。`CloudSyncVisual` 的橘色取自 `ActionColors.Priority`，与桌面端 `--warn` 同语义
 - **完成规则**：叶子任务才可勾选 / 右滑完成；所有有效子任务完成 → 父任务逐级 `recalcUp()` 自动完成；完成写 `CompletionLog`。删除子任务后同样要 `recalcUp()`（墓碑已被 `childrenOf` 排除），同步 `applyMerged()` 末尾跑 `recalcAllParents()`（不写日志）自愈其它端来的脏完成态
 - **优先级**：`0 不设 / 1 低 #4FBF9E / 2 普通 #4A86D6 / 3 高 #E08A34 / 4 紧急 #DE5B55`；选择器从高到低 + 末尾「不设」；新建默认普通(2)；0 不渲染标签
 - **分类颜色**：四端统一 8 色 `#34C7A8 / #5AA9E6 / #F2A65A / #A78BFA / #22B8CF / #F08A8A / #AACB5E / #7C96B0`；带 `#` 大写存储；`parseHex()` 兼容旧值

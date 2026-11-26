@@ -15,6 +15,7 @@ import com.doit.app.data.TaskNode
 import com.doit.app.data.TaskRepository
 import com.doit.app.data.TaskEntity
 import com.doit.app.data.buildTree
+import com.doit.app.data.sortTopByPriority
 import com.doit.app.sync.DavUrl
 import com.doit.app.sync.SnapshotCodec
 import com.doit.app.sync.SyncEngine
@@ -94,6 +95,8 @@ data class UiState(
     val settings: AppSettings = AppSettings(),
     /** 本地快照与上次成功同步的 base 是否内容一致；true=绿勾云，false=本地有未同步改动 */
     val cloudConsistent: Boolean = true,
+    /** 今日待办是否按顶级任务优先级排序（紧急优先）；纯本地 UI 偏好 */
+    val sortByPriority: Boolean = false,
     val loading: Boolean = true,
 ) {
     val remaining: Int get() = (total - done).coerceAtLeast(0)
@@ -146,7 +149,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 整体完成且完成日期不是今天的顶级任务才从首页移除（历史完成记录进月视图）。
         val today = LocalDate.now()
         val todayNodes = tree.filter { showInToday(it, today) }
-        val visible = if (filter == "all") todayNodes else todayNodes.filter { it.task.category == filter.removePrefix("cat:") }
+        val filtered = if (filter == "all") todayNodes else todayNodes.filter { it.task.category == filter.removePrefix("cat:") }
+        val visible = sortTopByPriority(filtered, settings.sortByPriority)
         val doneTop = visible.count { it.task.done }
         UiState(
             nodes = visible,
@@ -169,6 +173,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             skin = FlowSkin.from(settings.skin),
             settings = settings,
             cloudConsistent = cloudConsistent(allTasksSync, allCategoriesSync, settings),
+            sortByPriority = settings.sortByPriority,
             loading = false,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
@@ -215,6 +220,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setFilter(filter: String) {
         _filter.value = filter
+    }
+
+    /** 紧急优先开关：只影响展示，立即持久化到本地设置，不写待办快照 */
+    fun toggleSortByPriority() {
+        viewModelScope.launch {
+            settingsRepo.setSortByPriority(!settingsRepo.current().sortByPriority)
+        }
     }
 
     // ---------- 面板 ----------

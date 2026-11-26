@@ -34,6 +34,8 @@ data class AppSettings(
     val deviceId: String = "",
     /** 可选：GitHub 只读 Token，私有仓库「检查更新」用，留空则匿名请求 */
     val githubToken: String = "",
+    /** 今日待办「紧急优先」：只重排顶级任务（4→0），子任务顺序不变；纯本地 UI 偏好，不进同步快照 */
+    val sortByPriority: Boolean = false,
 )
 
 class SettingsRepository(private val context: Context) {
@@ -52,6 +54,7 @@ class SettingsRepository(private val context: Context) {
         val syncRevision = longPreferencesKey("sync_revision")
         val deviceId = stringPreferencesKey("device_id")
         val githubToken = stringPreferencesKey("github_token")
+        val sortByPriority = booleanPreferencesKey("sort_by_priority")
     }
 
     val settings: Flow<AppSettings> = context.settingsStore.data.map { p ->
@@ -69,6 +72,7 @@ class SettingsRepository(private val context: Context) {
             syncRevision = p[Keys.syncRevision] ?: 0L,
             deviceId = p[Keys.deviceId] ?: "",
             githubToken = p[Keys.githubToken] ?: "",
+            sortByPriority = p[Keys.sortByPriority] ?: false,
         )
     }
 
@@ -92,6 +96,9 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setGithubToken(token: String) = context.settingsStore.edit { it[Keys.githubToken] = token }
+
+    /** 紧急优先只是本地显示偏好，切换后立刻落盘，不走同步快照 */
+    suspend fun setSortByPriority(enabled: Boolean) = context.settingsStore.edit { it[Keys.sortByPriority] = enabled }
 
     suspend fun setLastSync(text: String) = context.settingsStore.edit { it[Keys.lastSync] = text }
 

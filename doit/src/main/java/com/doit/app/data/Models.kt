@@ -97,5 +97,12 @@ fun buildTree(tasks: List<TaskEntity>): List<TaskNode> {
         .map(::build)
 }
 
+/**
+ * 今日待办「紧急优先」：只重排传入的顶级任务（优先级 4→0），同优先级保持原顺序；
+ * 子任务的顺序与节点引用完全不动。纯展示排序，不修改存储、也不进同步快照。
+ */
+fun sortTopByPriority(nodes: List<TaskNode>, enabled: Boolean): List<TaskNode> =
+    if (enabled) nodes.sortedWith(compareByDescending<TaskNode> { it.task.priority }) else nodes
+
 /** 拍平成一维，方便统计与批量操作 */
 fun flatten(nodes: List<TaskNode>): List<TaskNode> = nodes.flatMap { listOf(it) + flatten(it.children) }

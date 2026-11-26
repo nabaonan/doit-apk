@@ -1,5 +1,6 @@
 package com.doit.app.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,10 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,11 +30,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.doit.app.ui.theme.ActionColors
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -286,18 +284,14 @@ private fun DrawScope.drawDoitIcon(kind: DoitIconKind, c: Color, w: Float, u: Fl
     }
 }
 
-/** Material Icons 官方 Cloud 轮廓路径（24×24 网格），用虚线描边即得「空心云」。 */
-private const val MATERIAL_CLOUD_PATH =
-    "M19.35 10.04C18.67 6.59 15.64 4 12 4c-3.11 0-5.64 1.64-6.65 4.04C2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"
-
 /**
- * 云同步按钮的完整视觉，铺满圆形按钮（尺寸传按钮边长即可），三态互斥：
- * - 未同步（本地有改动没推）：绿色虚线环 + 虚线空心云（数据还未上传的「空」态）；
- * - 同步中 [syncing]：环形进度 + 浅绿色云彩，中央上下双向箭头做流动动画；
- * - 已同步 [consistent]：实色绿色云朵（CloudDone）+ 白色对钩，外面一圈实线圆。
+ * 云同步按钮的完整视觉，铺满圆形按钮（尺寸传按钮边长即可）。三态与桌面端一致：
+ * - 未同步（本地有改动没推）：橘黄色实心云 + 白色向上箭头（待上传）；
+ * - 同步中 [syncing]：云彩变绿，白色向上箭头往复上升 + 外圈旋转进度；
+ * - 已同步 [consistent]：绿色云彩 + 白色对钩 + 外圈实线圆。
  *
- * 云朵、箭头、对钩全部来自 Google 官方开源图标库 Material Icons Extended（Apache 2.0），
- * 状态外圈（虚线/进度/实线圆）用 Canvas 绘制，因为它是状态指示器而非图标。
+ * 云朵/箭头/对钩全部来自 Google 官方开源图标库 Material Icons（Apache 2.0），
+ * 外圈状态环用 Canvas 绘制，因为它是状态指示器而非图标。
  */
 @Composable
 fun CloudSyncVisual(
@@ -314,118 +308,79 @@ fun CloudSyncVisual(
         animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart),
         label = "ringSpin",
     )
-    // 两支箭头各自沿云心上下往复，体现数据在手机与云之间双向流动；箭尖始终朝上/下，不旋转。
-    val arrowTravel = (size.value * 0.065f).dp
-    val upArrowOffset by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "upArrow",
+    // 箭头在云心小幅往复上升；箭尖始终朝上，不旋转。
+    val upload by infinite.animateFloat(
+        initialValue = 0.25f,
+        targetValue = -0.25f,
+        animationSpec = infiniteRepeatable(tween(850, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "uploadArrow",
     )
-    val downArrowOffset by infinite.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "downArrow",
-    )
+    val dirty = !consistent && !syncing
+    val cloudColor = if (dirty) ActionColors.Priority else tint
+    val arrowTravel = size.value * 0.075f
 
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        // ---- 外圈状态环 ----
+        // ---- 外圈状态环（同步中旋转 / 已同步实线 / 未同步虚线） ----
         Canvas(Modifier.matchParentSize()) {
             val u = this.size.minDimension / 24f
             val ringR = 10.6f * u
             when {
-                syncing -> {
-                    // 环形进度：一段缺口环匀速旋转，经典 indeterminate 进度信号
-                    drawArc(
-                        color = tint,
-                        startAngle = spin,
-                        sweepAngle = 275f,
-                        useCenter = false,
-                        topLeft = Offset((12f * u) - ringR, (12f * u) - ringR),
-                        size = Size(ringR * 2f, ringR * 2f),
-                        style = Stroke(width = 1.9f * u, cap = StrokeCap.Round),
-                    )
-                }
-                consistent -> {
-                    // 已同步：外面也要有一圈圆圈（实线）
-                    drawCircle(
-                        color = tint,
-                        radius = ringR,
-                        center = Offset(12f * u, 12f * u),
-                        style = Stroke(width = 1.6f * u),
-                    )
-                }
-                else -> {
-                    // 未同步：绿色虚线环 + 虚线空心云，提示本地有改动待推、云端还是「空」的
-                    drawCircle(
-                        color = tint,
-                        radius = ringR,
-                        center = Offset(12f * u, 12f * u),
-                        style = Stroke(
-                            width = 1.6f * u,
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.6f * u, 2.2f * u)),
-                        ),
-                    )
-                    val cloud = PathParser().parsePathString(MATERIAL_CLOUD_PATH).toPath()
-                    val cloudScale = 0.92f * u
-                    val cloudStroke = 1.7f * u / cloudScale
-                    translate(left = 12f * u - 12f * cloudScale, top = 12f * u - 12f * cloudScale) {
-                        scale(cloudScale) {
-                            drawPath(
-                                path = cloud,
-                                color = tint,
-                                style = Stroke(
-                                    width = cloudStroke,
-                                    cap = StrokeCap.Round,
-                                    join = StrokeJoin.Round,
-                                    pathEffect = PathEffect.dashPathEffect(
-                                        floatArrayOf(2.4f * u / cloudScale, 2f * u / cloudScale),
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-                }
+                syncing -> drawArc(
+                    color = tint,
+                    startAngle = spin,
+                    sweepAngle = 275f,
+                    useCenter = false,
+                    topLeft = Offset((12f * u) - ringR, (12f * u) - ringR),
+                    size = Size(ringR * 2f, ringR * 2f),
+                    style = Stroke(width = 1.9f * u, cap = StrokeCap.Round),
+                )
+                consistent -> drawCircle(
+                    color = tint,
+                    radius = ringR,
+                    center = Offset(12f * u, 12f * u),
+                    style = Stroke(width = 1.6f * u),
+                )
+                else -> drawCircle(
+                    color = cloudColor,
+                    radius = ringR,
+                    center = Offset(12f * u, 12f * u),
+                    style = Stroke(
+                        width = 1.6f * u,
+                        cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.6f * u, 2.2f * u)),
+                    ),
+                )
             }
         }
 
-        // ---- 中心图标：全部来自 Material Icons Extended ----
+        // ---- 中心图标：橘云上箭头 → 绿云上箭头动画 → 绿云对钩 ----
+        Icon(
+            imageVector = Icons.Filled.Cloud,
+            contentDescription = null,
+            tint = cloudColor,
+            modifier = Modifier.size(size * if (dirty) 0.62f else 0.66f),
+        )
         when {
-            syncing -> {
-                // 同步中：浅绿色云 + 两支上下箭头的流动动画（箭尖朝上/下，不旋转）
-                Icon(
-                    imageVector = Icons.Filled.Cloud,
-                    contentDescription = null,
-                    tint = tint.copy(alpha = 0.32f),
-                    modifier = Modifier.size(size * 0.74f),
-                )
-                Icon(
-                    imageVector = Icons.Filled.ArrowUpward,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier
-                        .size(size * 0.21f)
-                        .offset(y = (-(1f - upArrowOffset) * arrowTravel.value).dp),
-                )
-                Icon(
-                    imageVector = Icons.Filled.ArrowDownward,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier
-                        .size(size * 0.21f)
-                        .offset(y = ((1f - downArrowOffset) * arrowTravel.value).dp),
-                )
-            }
-            consistent -> Icon(
-                imageVector = Icons.Filled.CloudDone,
+            dirty -> Icon(
+                imageVector = Icons.Filled.ArrowUpward,
                 contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(size * 0.66f),
+                tint = Color.White,
+                modifier = Modifier.size(size * 0.2f),
             )
-            // 未同步：空心云已在外圈 Canvas 里以虚线画出，这里不再叠实心图标
-            else -> Unit
+            syncing -> Icon(
+                imageVector = Icons.Filled.ArrowUpward,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .size(size * 0.21f)
+                    .offset(y = (upload * arrowTravel).dp),
+            )
+            else -> Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(size * 0.25f),
+            )
         }
     }
 }

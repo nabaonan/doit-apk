@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +54,9 @@ import com.doit.app.ui.components.Satellite
 import com.doit.app.ui.components.SheetHost
 import com.doit.app.ui.components.TaskCallbacks
 import com.doit.app.ui.components.TopTaskRow
+import com.doit.app.ui.theme.ActionColors
 import com.doit.app.ui.theme.Doit
+import com.doit.app.ui.theme.Priority
 import com.doit.app.ui.theme.SansFamily
 import com.doit.app.ui.theme.displayStyle
 import kotlinx.coroutines.delay
@@ -120,6 +123,7 @@ fun MainScreen(vm: MainViewModel) {
                 syncing = syncing,
                 onFilter = vm::setFilter,
                 onSync = { vm.syncDav(state.settings.davUrl, state.settings.davUser, state.settings.davPass) },
+                onToggleSort = vm::toggleSortByPriority,
             )
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -264,7 +268,13 @@ fun MainScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun ListHeader(state: UiState, syncing: Boolean, onFilter: (String) -> Unit, onSync: () -> Unit) {
+private fun ListHeader(
+    state: UiState,
+    syncing: Boolean,
+    onFilter: (String) -> Unit,
+    onSync: () -> Unit,
+    onToggleSort: () -> Unit,
+) {
     val today = LocalDate.now()
     val kicker = "${today.year}年${today.monthValue}月${today.dayOfMonth}日 星期${WEEKDAYS_CN[today.dayOfWeek.value - 1]}"
 
@@ -281,6 +291,9 @@ private fun ListHeader(state: UiState, syncing: Boolean, onFilter: (String) -> U
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("今日", style = displayStyle, modifier = Modifier.weight(1f))
+            // 紧急优先与桌面端同一语义：只重排顶级任务，子任务顺序不变；纯本地显示偏好。
+            UrgentSortToggle(enabled = state.sortByPriority, onClick = onToggleSort)
+            Spacer(Modifier.width(8.dp))
             // 云同步按钮：只有"真正连通并验证通过"才出现——开关打开、服务器三项配置齐全、
             // 且测试连接/保存并同步成功过（davVerified）。没验证过就不会显示点了报错的按钮。
             // 紧贴进度环左侧，未显示时连占位都不留，右侧布局不跳。
@@ -335,15 +348,12 @@ private fun ListHeader(state: UiState, syncing: Boolean, onFilter: (String) -> U
 
 /**
  * 今日进度左侧的云同步按钮：浅底实心圆钮 + 云同步视觉，尺寸与右侧进度环相当（54dp vs 56dp）。
- * 三态由 [CloudSyncVisual] 统一表达，全部使用主题绿，不再出现橙色/黄色：
- * - 未同步：虚线圆环 + 虚线感绿色云彩；
- * - 同步中 [syncing]：环形进度 + 浅绿云彩 + 上下双向箭头动画，期间禁用点击防连点；
- * - 已同步 [consistent]：实色绿色云朵 + 白色对钩 + 外圈实线圆。
+ * 三态由 [CloudSyncVisual] 统一表达：未同步=橘云上箭头；同步中=绿云上箭头动画；已同步=绿云对钩。
  */
 @Composable
 private fun CloudSyncButton(consistent: Boolean, syncing: Boolean, onClick: () -> Unit) {
-    val bg = Doit.AccentSoft
-    val tint = Doit.AccentInk
+    val dirty = !consistent && !syncing
+    val bg = if (dirty) ActionColors.Priority.copy(alpha = 0.12f) else Doit.AccentSoft
     Box(
         modifier = Modifier
             .size(54.dp)
@@ -356,7 +366,33 @@ private fun CloudSyncButton(consistent: Boolean, syncing: Boolean, onClick: () -
             size = 50.dp,
             consistent = consistent,
             syncing = syncing,
-            tint = tint,
+            tint = Doit.AccentInk,
+        )
+    }
+}
+
+/** 紧急优先开关：与桌面端同一颜色语义，开启时实心红底白字；只影响今日列表顶级任务排序。 */
+@Composable
+private fun UrgentSortToggle(enabled: Boolean, onClick: () -> Unit) {
+    val urgent = Priority.URGENT.color
+    val fg = if (enabled) Color.White else urgent
+    Row(
+        modifier = Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (enabled) urgent else Doit.DangerBg)
+            .tapFeedback { onClick() }
+            .padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        DoitIcon(DoitIconKind.Flag, size = 14.dp, tint = fg)
+        Text(
+            "紧急优先",
+            color = fg,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
     }
 }
