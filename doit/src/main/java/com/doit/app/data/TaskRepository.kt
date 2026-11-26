@@ -180,7 +180,7 @@ class TaskRepository(private val db: DoitDatabase) {
         }
     }
 
-    private suspend fun applyDone(task: TaskEntity, done: Boolean) {
+    private suspend fun applyDone(task: TaskEntity, done: Boolean, log: Boolean = true) {
         val now = nowMs()
         taskDao.update(
             task.copy(
@@ -189,12 +189,14 @@ class TaskRepository(private val db: DoitDatabase) {
                 updatedAt = now,
             ),
         )
-        if (done) {
-            logDao.insert(
-                CompletionLogEntity(taskId = task.id, category = task.category, completedAt = now),
-            )
-        } else {
-            logDao.deleteForTask(task.id)
+        if (log) {
+            if (done) {
+                logDao.insert(
+                    CompletionLogEntity(taskId = task.id, category = task.category, completedAt = now),
+                )
+            } else {
+                logDao.deleteForTask(task.id)
+            }
         }
     }
 
@@ -202,7 +204,7 @@ class TaskRepository(private val db: DoitDatabase) {
      * 子任务全做完 → 自己自动勾上；有子任务被取消 → 自己退回未完成。
      * 一层层往上冒，和视觉稿 recalc() 的行为一致。
      */
-    private suspend fun recalcUp(startParentId: Long?) {
+    private suspend fun recalcUp(startParentId: Long?, log: Boolean = true) {
         var parentId = startParentId
         while (parentId != null) {
             val parent = taskDao.byId(parentId) ?: break
@@ -211,15 +213,22 @@ class TaskRepository(private val db: DoitDatabase) {
             val allDone = kids.all { it.done }
             when {
                 allDone && !parent.done -> {
-                    applyDone(parent, true)
+                    applyDone(parent, true, log)
                     parentId = parent.parentId
                 }
                 !allDone && parent.done -> {
-                    applyDone(parent, false)
+                    applyDone(parent, false, log)
                     parentId = parent.parentId
                 }
                 else -> break
             }
+        }
+    }
+
+    /** 载入合并结果后自愈：远端墓碑可能让"子任务全完成但父任务未完成"的旧状态继续传播。 */
+    private suspend fun recalcAllParents() {
+        for (row in taskDao.allIncludingDeleted()) {
+            if (row.deletedAt == null && row.parentId != null) recalcUp(row.parentId, log = false)
         }
     }
 
@@ -303,6 +312,7 @@ class TaskRepository(private val db: DoitDatabase) {
     /** 软删除：留下墓碑，删除动作才能同步到另一台设备，而不是被当成「本地没有这条」 */
     suspend fun delete(id: Long) {
         db.withTransaction {
+            val parentId = taskDao.byId(id)?.parentId
             val ids = descendantIds(id)
             val now = nowMs()
             ids.forEach { tid ->
@@ -310,6 +320,8 @@ class TaskRepository(private val db: DoitDatabase) {
                 taskDao.update(t.copy(deletedAt = now, updatedAt = now))
             }
             logDao.deleteForTasks(ids)
+            // 删掉最后一个未完成的子任务后，父任务必须立即自动完成（历史 bug：删完不重算）。
+            if (parentId != null) recalcUp(parentId)
         }
     }
 
@@ -403,6 +415,7 @@ class TaskRepository(private val db: DoitDatabase) {
             // 墓碑行对应的完成日志不再出现在统计里
             val deletedIds = taskDao.allIncludingDeleted().filter { it.deletedAt != null }.map { it.id }
             if (deletedIds.isNotEmpty()) logDao.deleteForTasks(deletedIds)
+            recalcAllParents()
         }
     }
 
