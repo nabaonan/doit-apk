@@ -1,0 +1,91 @@
+run_number: 28
+ref: refs/tags/v1.0.18
+sha: c62e4097f9bbe5b38dcadeb0fd73aa154b6b8eaa
+status: success
+----------------------------------------
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: assembleRelease
+
+> Configure project :doit
+doit 版本：1.0.18 (10018) 来自 tag v1.0.18
+
+> Task :doit:preBuild UP-TO-DATE
+> Task :doit:preReleaseBuild UP-TO-DATE
+> Task :doit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :doit:buildKotlinToolingMetadata
+> Task :doit:generateReleaseResValues
+> Task :doit:generateReleaseBuildConfig
+> Task :doit:createReleaseCompatibleScreenManifests
+> Task :doit:generateReleaseResources
+> Task :doit:extractDeepLinksRelease
+> Task :doit:packageReleaseResources
+> Task :doit:parseReleaseLocalResources
+> Task :doit:mapReleaseSourceSetPaths
+> Task :doit:checkReleaseAarMetadata
+> Task :doit:extractProguardFiles
+> Task :doit:javaPreCompileRelease
+> Task :doit:processReleaseMainManifest
+> Task :doit:processReleaseManifest
+> Task :doit:mergeReleaseJniLibFolders
+> Task :doit:processReleaseManifestForPackage
+> Task :doit:desugarReleaseFileDependencies
+> Task :doit:mergeReleaseStartupProfile
+> Task :doit:mergeReleaseArtProfile
+> Task :doit:mergeReleaseNativeLibs
+> Task :doit:mergeReleaseShaders
+> Task :doit:compileReleaseShaders NO-SOURCE
+> Task :doit:generateReleaseAssets UP-TO-DATE
+
+> Task :doit:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so.
+
+> Task :doit:extractReleaseNativeSymbolTables
+> Task :doit:mergeReleaseAssets
+> Task :doit:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :doit:compressReleaseAssets
+> Task :doit:extractReleaseVersionControlInfo
+> Task :doit:validateSigningRelease
+> Task :doit:writeReleaseAppMetadata
+> Task :doit:writeReleaseSigningConfigVersions
+> Task :doit:mergeReleaseResources
+> Task :doit:checkReleaseDuplicateClasses
+> Task :doit:collectReleaseDependencies
+> Task :doit:sdkReleaseDependencyData
+> Task :doit:processReleaseResources
+> Task :doit:mergeExtDexRelease
+> Task :doit:optimizeReleaseResources
+> Task :doit:kspReleaseKotlin
+> Task :doit:compileReleaseKotlin
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:124:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:128:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:130:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:132:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:144:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:148:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:150:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:152:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:203:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:205:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:259:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+w: file:///home/runner/work/doit-apk/doit-apk/doit/src/main/java/com/doit/app/ui/DoitIcon.kt:261:17 'fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float): Unit' is deprecated. Use quadraticTo() for consistency with cubicTo().
+
+> Task :doit:processReleaseJavaRes
+> Task :doit:mergeReleaseJavaResource
+> Task :doit:compileReleaseJavaWithJavac
+> Task :doit:generateReleaseLintVitalReportModel
+> Task :doit:dexBuilderRelease
+> Task :doit:mergeReleaseGlobalSynthetics
+> Task :doit:mergeDexRelease
+> Task :doit:compileReleaseArtProfile
+> Task :doit:packageRelease
+> Task :doit:createReleaseApkListingFileRedirect
+> Task :doit:lintVitalAnalyzeRelease
+> Task :doit:lintVitalReportRelease
+> Task :doit:lintVitalRelease
+> Task :doit:assembleRelease
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1795712713715.json
+
+BUILD SUCCESSFUL in 2m 52s
+51 actionable tasks: 51 executed
+Configuration cache entry stored.
